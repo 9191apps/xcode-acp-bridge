@@ -1,0 +1,20 @@
+{
+  "name": "xcode-acp-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "test": "bun test",
+    "acp-bridge": "bun run src/acp-bridge.ts",
+    "setup": "bun run scripts/setup.ts"
+  },
+  "dependencies": {
+    "hono": "^4.9.6"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.9.2"
+  }
+}

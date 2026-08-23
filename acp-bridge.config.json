@@ -1,0 +1,37 @@
+{
+  "routes": {
+    "opencode": {
+      "command": "~/.opencode/bin/opencode",
+      "args": ["acp"],
+      "modelsCommand": {
+        "command": "~/.opencode/bin/opencode",
+        "args": ["models"]
+      }
+    },
+    "cursor": {
+      "command": "~/.local/bin/agent",
+      "args": ["acp"],
+      "modelApply": "spawn-arg",
+      "resumeMode": "cursor-acp-load",
+      "resumeArgs": ["--resume", "{sessionId}"],
+      "modelsCommand": {
+        "command": "~/.local/bin/agent",
+        "args": ["models"]
+      }
+    },
+    "qodercli": {
+      "command": "~/.local/bin/qodercli",
+      "args": ["--acp"],
+      "modelApply": "spawn-arg",
+      "resumeMode": "qoder-acp-load",
+      "modelsCommand": {
+        "command": "~/.local/bin/qodercli",
+        "args": ["--list-models"]
+      }
+    }
+  },
+  "defaultRoute": "opencode",
+  "eventsPath": "./data/acp-events.jsonl",
+  "routeStatePath": "./data/acp-route.json",
+  "maxRawBytes": 2097152
+}

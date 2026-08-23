@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Xcode Observatory — Conversation</title>
+    <link rel="stylesheet" href="/fonts.css" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="page-detail">
+    <div class="app">
+      <header class="topbar topbar-detail">
+        <div class="topbar-left">
+          <a class="brand brand-link" href="/" title="Back to conversations">
+            <div class="brand-mark brand-mark-sm" aria-hidden="true">
+              <span class="rec-dot"></span>
+            </div>
+            <div class="brand-text">
+              <h1 class="brand-title-sm">Xcode <em>Observatory</em></h1>
+            </div>
+          </a>
+          <span class="topbar-divider" aria-hidden="true"></span>
+          <div class="detail-topbar-title">
+            <span class="tag tag-post">ACP</span>
+            <code class="path" id="detail-title">Conversation</code>
+            <span class="pill pill-ok" id="detail-status"></span>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <div class="live-chip" id="live-chip" title="SSE connection status">
+            <span class="live-dot"></span>
+            <span id="live-text">LIVE</span>
+          </div>
+        </div>
+      </header>
+
+      <main class="page-main detail-main">
+        <div id="acp-detail"></div>
+      </main>
+    </div>
+    <script src="/app.js"></script>
+    <script src="/detail.js"></script>
+  </body>
+</html>

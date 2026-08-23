@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Xcode Observatory — Conversations</title>
+    <link rel="stylesheet" href="/fonts.css" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="page-list">
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <span class="rec-dot"></span>
+          </div>
+          <div class="brand-text">
+            <h1>Xcode <em>Observatory</em></h1>
+            <p class="brand-sub">ACP bridge observer &middot; 127.0.0.1:8787</p>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <div class="live-chip" id="live-chip" title="SSE connection status">
+            <span class="live-dot"></span>
+            <span id="live-text">LIVE</span>
+          </div>
+          <button id="btn-clear" class="btn ghost" type="button">
+            <span class="btn-icon" aria-hidden="true">✕</span>Clear
+          </button>
+          <button id="btn-export" class="btn ghost" type="button">
+            <span class="btn-icon" aria-hidden="true">⇩</span>Export
+          </button>
+        </div>
+      </header>
+
+      <main class="page-main">
+        <div class="toolbar route-bar">
+          <label class="toolbar-label" for="acp-next-route">Next conversation</label>
+          <select id="acp-next-route"></select>
+          <label class="toolbar-label" for="acp-next-model">Model</label>
+          <select id="acp-next-model"></select>
+          <span id="acp-model-status" class="hint"></span>
+          <span class="hint hint-wide">Applies to the next Xcode spawn. Open a conversation to switch its model — live applies now, ended applies on next resume.</span>
+        </div>
+
+        <div class="toolbar list-toolbar">
+          <input type="search" id="list-filter" placeholder="Filter sessions (route · model · project · session id · status)…" aria-label="Filter sessions" autocomplete="off" />
+          <span class="count-label" id="list-count"></span>
+        </div>
+
+        <div class="table-wrap" id="acp-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Started</th>
+                <th>Route</th>
+                <th>Model</th>
+                <th>Project</th>
+                <th class="num">Prompts</th>
+                <th class="num">Tools</th>
+                <th>Duration</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="acp-conversation-list"></tbody>
+          </table>
+        </div>
+
+        <div class="empty-state hidden" id="acp-empty">
+          <div class="empty-glyph" aria-hidden="true">⌁</div>
+          <p class="empty-title">No ACP conversations yet</p>
+          <p class="empty-hint">Start a conversation in Xcode with the ACP Bridge agent and it will be logged here.</p>
+        </div>
+      </main>
+    </div>
+    <script src="/app.js"></script>
+    <script src="/list.js"></script>
+  </body>
+</html>
