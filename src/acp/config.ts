@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { resolveAcpPathLayout } from "./paths";
 import type { AcpBackend, AcpBridgeConfig, AcpCommand } from "./types";
 
 function expandPath(value: string): string {
@@ -30,16 +31,18 @@ function expandBackend(backend: AcpBackend): AcpBackend {
   };
 }
 
+/** Git checkout root; for runtime data use {@link resolveAcpPathLayout}. */
 export function repoRoot(): string {
   return path.resolve(import.meta.dir, "../..");
 }
 
 export function defaultConfigPath(): string {
-  return process.env.ACP_BRIDGE_CONFIG ?? path.join(repoRoot(), "acp-bridge.config.json");
+  return resolveAcpPathLayout().configPath;
 }
 
 function resolveConfigPath(configPath: string): string {
-  return path.isAbsolute(configPath) ? configPath : path.join(repoRoot(), configPath);
+  const layout = resolveAcpPathLayout();
+  return path.isAbsolute(configPath) ? configPath : path.join(layout.home, configPath);
 }
 
 function isNonEmptyObject(value: unknown): value is Record<string, unknown> {
