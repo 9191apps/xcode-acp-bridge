@@ -124,14 +124,29 @@ final class ServeDecisionMakerTests: XCTestCase {
         }
     }
 
-    func testPortOccupiedByOtherWhenResponseIsUnparseable() {
+    func testHealthCheckFailedWhenResponseIsUnparseable() {
+        // A decode failure isn't evidence of a *foreign* server (which would
+        // decode fine, just with a different product) — it should be a
+        // distinct error, not conflated with portOccupiedByOther.
         struct DecodeStandIn: Error {}
         let decision = ServeDecisionMaker.decide(healthResult: .failure(DecodeStandIn()))
         switch decision {
-        case .failure(.portOccupiedByOther):
+        case .failure(.healthCheckFailed):
             break
         default:
-            XCTFail("expected portOccupiedByOther, got \(decision)")
+            XCTFail("expected healthCheckFailed, got \(decision)")
+        }
+    }
+
+    func testHealthCheckFailedWhenHttpErrorStatus() {
+        // Similarly, an unexpected HTTP status (e.g. 500) is not the same
+        // signal as a successful response with a mismatched product.
+        let decision = ServeDecisionMaker.decide(healthResult: .failure(ApiClientError.http(500)))
+        switch decision {
+        case .failure(.healthCheckFailed):
+            break
+        default:
+            XCTFail("expected healthCheckFailed, got \(decision)")
         }
     }
 }

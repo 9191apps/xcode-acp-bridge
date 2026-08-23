@@ -7,6 +7,12 @@ enum ServeError: Error, Equatable, LocalizedError {
     case bundledExecutableMissing
     case launchFailed(String)
     case healthTimeout
+    /// The `/health` request itself failed in a way that isn't a plain
+    /// "nothing is listening" connection failure and isn't a successful
+    /// response with a mismatched product either — e.g. a decode failure or
+    /// an unexpected HTTP status. We don't know if that's our server or a
+    /// foreign one, so we surface it distinctly instead of guessing.
+    case healthCheckFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -18,6 +24,8 @@ enum ServeError: Error, Equatable, LocalizedError {
             return "Failed to launch acp-serve: \(reason)"
         case .healthTimeout:
             return "acp-serve did not become healthy in time."
+        case .healthCheckFailed(let detail):
+            return "Health check on port 8787 failed unexpectedly (\(detail))."
         }
     }
 }
@@ -42,7 +50,12 @@ enum ServeDecisionMaker {
             if isConnectionFailure(error) {
                 return .spawn
             }
-            return .failure(.portOccupiedByOther("unrecognized response: \(error.localizedDescription)"))
+            // A response came back but wasn't a clean success — e.g. a
+            // decode failure or unexpected HTTP status. That's not evidence
+            // of a *foreign* server (which would decode fine, just with a
+            // different product), so don't conflate it with
+            // `portOccupiedByOther`.
+            return .failure(.healthCheckFailed(error.localizedDescription))
         }
     }
 
@@ -141,11 +154,14 @@ final class ServeProcessManager: ObservableObject {
 
         let process = Process()
         process.executableURL = serveURL
-        process.environment = [
+        let overrides = [
             "ACP_BRIDGE_HOME": home.path,
             "ACP_BRIDGE_CONFIG": configPath.path,
             "ACP_BRIDGE_RESOURCES": resourcesURL.path,
         ]
+        // Merge onto the inherited environment (PATH, HOME, etc.) rather than
+        // replacing it — acp-serve still needs a usable PATH/HOME to run.
+        process.environment = ProcessInfo.processInfo.environment.merging(overrides) { _, override in override }
         do {
             try process.run()
         } catch {
