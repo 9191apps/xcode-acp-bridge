@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { resolveBackendSpawnArgs, shouldInjectPendingModelOnNew } from "../src/acp/spawn-args";
 import { repoRoot } from "../src/acp/config";
@@ -99,5 +101,73 @@ describe("buildResumeLaunchArgs", () => {
       "/Users/me/proj",
     ]);
     expect(launched.argv[0]).toBe(path.join(repoRoot(), "src", "acp", "qoder-acp-resume.ts"));
+  });
+
+  test("packaged cursor helper launches directly from resources/bin", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "acp-resume-"));
+    const contents = path.join(root, "ACP Bridge.app", "Contents");
+    const execPath = path.join(contents, "MacOS", "ACP Bridge");
+    const helper = path.join(contents, "Resources", "bin", "cursor-acp-resume");
+    const alternateHelper = path.join(contents, "MacOS", "cursor-acp-resume");
+    fs.mkdirSync(path.dirname(helper), { recursive: true });
+    fs.writeFileSync(helper, "#!/bin/sh\n");
+    fs.chmodSync(helper, 0o755);
+    fs.mkdirSync(path.dirname(alternateHelper), { recursive: true });
+    fs.writeFileSync(alternateHelper, "#!/bin/sh\n");
+    fs.chmodSync(alternateHelper, 0o755);
+
+    try {
+      expect(
+        buildResumeLaunchArgs(
+          { command: "/usr/local/bin/agent", resumeMode: "cursor-acp-load" },
+          "session-1",
+          "/tmp/project",
+          { execPath, env: {} },
+        ),
+      ).toEqual({
+        bin: helper,
+        argv: [
+          "--agent",
+          "/usr/local/bin/agent",
+          "--session-id",
+          "session-1",
+          "--cwd",
+          "/tmp/project",
+        ],
+      });
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("app layout falls back to executable beside the app launcher", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "acp-resume-"));
+    const contents = path.join(root, "ACP Bridge.app", "Contents");
+    const execPath = path.join(contents, "MacOS", "ACP Bridge");
+    const helper = path.join(contents, "MacOS", "qoder-acp-resume");
+    fs.mkdirSync(path.dirname(helper), { recursive: true });
+    fs.writeFileSync(helper, "#!/bin/sh\n");
+    fs.chmodSync(helper, 0o755);
+
+    try {
+      expect(
+        buildResumeLaunchArgs(
+          { command: "/usr/local/bin/qodercli", resumeMode: "qoder-acp-load" },
+          "session-2",
+          null,
+          { execPath, env: {} },
+        ),
+      ).toEqual({
+        bin: helper,
+        argv: [
+          "--agent",
+          "/usr/local/bin/qodercli",
+          "--session-id",
+          "session-2",
+        ],
+      });
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 });

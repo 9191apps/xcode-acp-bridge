@@ -48,12 +48,36 @@ export function expandResumeArgs(resumeArgs: string[], sessionId: string): strin
   return resumeArgs.map((arg) => arg.replaceAll("{sessionId}", sessionId));
 }
 
-export function cursorAcpResumeScriptPath(): string {
-  return path.join(repoRoot(), "src", "acp", "cursor-acp-resume.ts");
+type ResumePathOptions = Parameters<typeof resolveAcpPathLayout>[0];
+
+function isExecutable(filePath: string): boolean {
+  try {
+    fs.accessSync(filePath, fs.constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-export function qoderAcpResumeScriptPath(): string {
-  return path.join(repoRoot(), "src", "acp", "qoder-acp-resume.ts");
+function acpResumeHelperPath(name: "cursor-acp-resume" | "qoder-acp-resume", opts?: ResumePathOptions): string {
+  const layout = resolveAcpPathLayout(opts);
+  const resourceHelper = path.join(layout.resources, "bin", name);
+  if (isExecutable(resourceHelper)) return resourceHelper;
+
+  if (layout.mode === "app") {
+    const appHelper = path.join(path.dirname(layout.resources), "MacOS", name);
+    if (isExecutable(appHelper)) return appHelper;
+  }
+
+  return path.join(repoRoot(), "src", "acp", `${name}.ts`);
+}
+
+export function cursorAcpResumeScriptPath(opts?: ResumePathOptions): string {
+  return acpResumeHelperPath("cursor-acp-resume", opts);
+}
+
+export function qoderAcpResumeScriptPath(opts?: ResumePathOptions): string {
+  return acpResumeHelperPath("qoder-acp-resume", opts);
 }
 
 /** Build the argv used inside the Terminal .command script for a route resume. */
@@ -61,29 +85,34 @@ export function buildResumeLaunchArgs(
   backend: Pick<AcpBackend, "command" | "resumeArgs" | "resumeMode">,
   sessionId: string,
   cwd: string | null,
+  opts?: ResumePathOptions,
 ): { bin: string; argv: string[] } {
   const mode = backend.resumeMode ?? "args";
   if (mode === "cursor-acp-load") {
+    const helperPath = cursorAcpResumeScriptPath(opts);
     const argv = [
-      cursorAcpResumeScriptPath(),
       "--agent",
       backend.command,
       "--session-id",
       sessionId,
     ];
     if (cwd) argv.push("--cwd", cwd);
-    return { bin: process.execPath, argv };
+    return helperPath.endsWith(".ts")
+      ? { bin: process.execPath, argv: [helperPath, ...argv] }
+      : { bin: helperPath, argv };
   }
   if (mode === "qoder-acp-load") {
+    const helperPath = qoderAcpResumeScriptPath(opts);
     const argv = [
-      qoderAcpResumeScriptPath(),
       "--agent",
       backend.command,
       "--session-id",
       sessionId,
     ];
     if (cwd) argv.push("--cwd", cwd);
-    return { bin: process.execPath, argv };
+    return helperPath.endsWith(".ts")
+      ? { bin: process.execPath, argv: [helperPath, ...argv] }
+      : { bin: helperPath, argv };
   }
   return {
     bin: backend.command,
