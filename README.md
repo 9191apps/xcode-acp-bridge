@@ -170,3 +170,7 @@ Run the full automated test suite:
 ```bash
 bun test
 ```
+
+## License
+
+[MIT](LICENSE) © 2026 91Apps
