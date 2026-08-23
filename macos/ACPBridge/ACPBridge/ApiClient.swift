@@ -61,6 +61,19 @@ struct AppStatus: Decodable, Equatable {
     let layoutMode: String
 }
 
+/// `PUT /api/acp-conversations/:bridgePid/model` success response shape.
+struct ConversationModelUpdateResponse: Decodable, Equatable {
+    let ok: Bool
+    let bridgePid: Int
+    let model: String
+}
+
+/// `POST /api/acp-conversations/:bridgePid/resume` success response shape.
+struct ConversationResumeResponse: Decodable, Equatable {
+    let ok: Bool
+    let sessionId: String
+}
+
 enum ApiClientError: Error, Equatable {
     case invalidResponse
     case http(Int)
@@ -118,6 +131,31 @@ struct ApiClient {
         )!
         components.queryItems = [URLQueryItem(name: "route", value: route)]
         return try await send(URLRequest(url: components.url!))
+    }
+
+    /// Lists recent ACP sessions grouped by `acpSessionId` (or standalone
+    /// spawns with none yet), newest first — for the MenuBarExtra's
+    /// "Recent sessions" submenu.
+    func acpConversationSessions() async throws -> [SessionSummary] {
+        try await send(URLRequest(url: baseURL.appendingPathComponent("api/acp-conversation-sessions")))
+    }
+
+    /// Sets a specific past/live conversation's model — unlike
+    /// `putAcpRoute`, this affects an already-spawned conversation rather
+    /// than only the *next* one.
+    func putConversationModel(bridgePid: Int, model: String) async throws -> ConversationModelUpdateResponse {
+        var request = URLRequest(url: baseURL.appendingPathComponent("api/acp-conversations/\(bridgePid)/model"))
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(["model": model])
+        return try await send(request)
+    }
+
+    /// Resumes a past conversation in Terminal via the server's resume helper.
+    func resumeConversation(bridgePid: Int) async throws -> ConversationResumeResponse {
+        var request = URLRequest(url: baseURL.appendingPathComponent("api/acp-conversations/\(bridgePid)/resume"))
+        request.httpMethod = "POST"
+        return try await send(request)
     }
 
     private func send<T: Decodable>(_ request: URLRequest) async throws -> T {

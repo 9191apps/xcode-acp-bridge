@@ -1,13 +1,14 @@
 import SwiftUI
 
-/// MenuBarExtra content — the design's full M1+M2 menu information
-/// architecture (Next conversation route/model, Backend status, Settings…,
-/// baseline actions). "Recent sessions" (Task 10) is intentionally still out
-/// of scope here.
+/// MenuBarExtra content — the design's full M1+M2+M3 menu information
+/// architecture (Next conversation route/model, Recent sessions, Backend
+/// status, Settings…, baseline actions).
 struct MenuBarView: View {
     @ObservedObject var serveManager: ServeProcessManager
     @ObservedObject var routeMenu: RouteMenuModel
     @ObservedObject var appStatus: AppStatusModel
+    @ObservedObject var sessionsMenu: SessionsMenuModel
+    @ObservedObject var navigator: ObservatoryNavigationModel
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
 
@@ -25,14 +26,10 @@ struct MenuBarView: View {
             modelSubmenu
         }
         .disabled(mutatingItemsDisabled)
+        recentSessionsSubmenu
         Divider()
         Button("Open Observatory") {
-            NSApp.activate(ignoringOtherApps: true)
-            if let window = NSApp.windows.first(where: { $0.canBecomeKey }) {
-                window.makeKeyAndOrderFront(nil)
-            } else {
-                openWindow(id: MainWindow.id)
-            }
+            activateObservatoryWindow()
         }
         backendStatusSubmenu
         Button("Copy Xcode Agent Paths") {
@@ -124,6 +121,63 @@ struct MenuBarView: View {
             Text(name)
         }
     }
+
+    @ViewBuilder
+    private var recentSessionsSubmenu: some View {
+        Menu("Recent sessions") {
+            if sessionsMenu.sessions.isEmpty {
+                Text(sessionsMenu.isLoading ? "Loading…" : "No recent sessions")
+            } else {
+                ForEach(sessionsMenu.sessions) { session in
+                    Menu(session.displayTitle) {
+                        sessionRowActions(session)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func sessionRowActions(_ session: SessionSummary) -> some View {
+        let rowBusy = sessionsMenu.pendingBridgePid == session.bridgePid
+        Menu("Set model") {
+            setModelOptions(session)
+        }
+        .disabled(!session.canSetModel || rowBusy)
+        Button("Resume in Terminal") {
+            Task { try? await sessionsMenu.resume(session) }
+        }
+        .disabled(!session.canResume || rowBusy)
+        Button("Open in Observatory") {
+            navigator.navigate(to: sessionsMenu.observatoryURL(for: session, baseURL: ApiClient.defaultBaseURL))
+            activateObservatoryWindow()
+        }
+    }
+
+    @ViewBuilder
+    private func setModelOptions(_ session: SessionSummary) -> some View {
+        let options = session.route.flatMap { sessionsMenu.modelOptions[$0] } ?? []
+        if options.isEmpty {
+            Text("No models available")
+        } else {
+            ForEach(options, id: \.self) { model in
+                Button {
+                    Task { try? await sessionsMenu.setModel(model, for: session) }
+                } label: {
+                    routeLabel(model, isSelected: model == session.model)
+                }
+            }
+        }
+    }
+
+    private func activateObservatoryWindow() {
+        NSApp.activate(ignoringOtherApps: true)
+        if let window = NSApp.windows.first(where: { $0.canBecomeKey }) {
+            window.makeKeyAndOrderFront(nil)
+        } else {
+            openWindow(id: MainWindow.id)
+        }
+    }
 }
 
 /// MenuBarExtra label — a plain `View`, unlike the menu content, so it
@@ -133,6 +187,7 @@ struct MenuBarLabel: View {
     @ObservedObject var serveManager: ServeProcessManager
     @ObservedObject var routeMenu: RouteMenuModel
     @ObservedObject var appStatus: AppStatusModel
+    @ObservedObject var sessionsMenu: SessionsMenuModel
 
     var body: some View {
         Image(systemName: serveManager.isRunning ? "bolt.circle.fill" : "bolt.circle")
@@ -140,6 +195,7 @@ struct MenuBarLabel: View {
                 guard serveManager.isRunning else { return }
                 await routeMenu.refresh()
                 await appStatus.refresh()
+                await sessionsMenu.refresh()
             }
     }
 }

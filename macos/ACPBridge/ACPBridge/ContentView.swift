@@ -28,12 +28,24 @@ enum AgentPaths {
     }
 }
 
+/// Shared Observatory navigation target — lets the MenuBarExtra's "Open in
+/// Observatory" action (Task 10) steer the Dock window's `WKWebView` to a
+/// specific conversation without either view knowing about the other
+/// directly. Defaults to the Observatory root.
+@MainActor
+final class ObservatoryNavigationModel: ObservableObject {
+    @Published private(set) var targetURL: URL = ApiClient.defaultBaseURL
+
+    func navigate(to url: URL) {
+        targetURL = url
+    }
+}
+
 struct ContentView: View {
     @ObservedObject var serveManager: ServeProcessManager
+    @ObservedObject var navigator: ObservatoryNavigationModel
     @State private var state: ShellState = .launching
     @State private var copyConfirmation = false
-
-    private let observatoryURL = ApiClient.defaultBaseURL
 
     var body: some View {
         VStack(spacing: 0) {
@@ -89,7 +101,7 @@ struct ContentView: View {
             ProgressView("Starting ACP Bridge…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .ready:
-            ObservatoryWebView(url: observatoryURL)
+            ObservatoryWebView(url: navigator.targetURL)
         case .failed(let message):
             errorView(message)
         }
@@ -123,5 +135,5 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView(serveManager: ServeProcessManager())
+    ContentView(serveManager: ServeProcessManager(), navigator: ObservatoryNavigationModel())
 }

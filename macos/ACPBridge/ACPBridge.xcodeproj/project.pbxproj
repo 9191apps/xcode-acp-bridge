@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		2569E1667FFA4E3687EC65D5 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07B69233162D9947C861DAE1 /* ContentView.swift */; };
+		2C53D25FBBFE3B26C0BBC739 /* SessionsMenuModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9991F609545BA3858F5FE63 /* SessionsMenuModelTests.swift */; };
+		2CCCB3B4185D59D87CF7E5C9 /* SessionsMenuModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC14CB8142C5477B6E402F41 /* SessionsMenuModel.swift */; };
 		36E854B48D8F1FD6295BB7D9 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAD39E64E314146E18802817 /* SettingsView.swift */; };
 		38014B13D1B2B8D4315E26F8 /* AppSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDBB99101E332995C3294134 /* AppSettingsTests.swift */; };
 		3B89FAA8C0FED43F6A7FA9E1 /* ServeProcessManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E8EA607A8F70E437D90B4EB /* ServeProcessManagerTests.swift */; };
@@ -50,8 +52,10 @@
 		A28288A886881DC80F012C6D /* AppMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMain.swift; sourceTree = "<group>"; };
 		A4F3705208D17FCCDA77490F /* RouteMenuModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteMenuModelTests.swift; sourceTree = "<group>"; };
 		A7B54026BBA02E63F123410C /* ObservatoryWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObservatoryWebView.swift; sourceTree = "<group>"; };
+		A9991F609545BA3858F5FE63 /* SessionsMenuModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionsMenuModelTests.swift; sourceTree = "<group>"; };
 		AAD39E64E314146E18802817 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		BDBB99101E332995C3294134 /* AppSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsTests.swift; sourceTree = "<group>"; };
+		CC14CB8142C5477B6E402F41 /* SessionsMenuModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionsMenuModel.swift; sourceTree = "<group>"; };
 		CD31E93CA58CB52435CB32DA /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
 		DC9EFA2F6C6A2D6A65070416 /* ServeProcessManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServeProcessManager.swift; sourceTree = "<group>"; };
 		E2361E78D892861DD2C727C8 /* AppStatusModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStatusModelTests.swift; sourceTree = "<group>"; };
@@ -66,6 +70,7 @@
 				50753ABB7ABF8468E9262882 /* LoginItemManagerTests.swift */,
 				A4F3705208D17FCCDA77490F /* RouteMenuModelTests.swift */,
 				2E8EA607A8F70E437D90B4EB /* ServeProcessManagerTests.swift */,
+				A9991F609545BA3858F5FE63 /* SessionsMenuModelTests.swift */,
 			);
 			path = ACPBridgeTests;
 			sourceTree = "<group>";
@@ -93,6 +98,7 @@
 				A7B54026BBA02E63F123410C /* ObservatoryWebView.swift */,
 				9DF2F15AF9660A7328232389 /* RouteMenuModel.swift */,
 				DC9EFA2F6C6A2D6A65070416 /* ServeProcessManager.swift */,
+				CC14CB8142C5477B6E402F41 /* SessionsMenuModel.swift */,
 				AAD39E64E314146E18802817 /* SettingsView.swift */,
 			);
 			path = ACPBridge;
@@ -197,6 +203,7 @@
 				60B480EAFA97C6ECC6BEE1E8 /* ObservatoryWebView.swift in Sources */,
 				90408F7FD1901C8F5C49FCD8 /* RouteMenuModel.swift in Sources */,
 				C963AE8E7FF276982B24C881 /* ServeProcessManager.swift in Sources */,
+				2CCCB3B4185D59D87CF7E5C9 /* SessionsMenuModel.swift in Sources */,
 				36E854B48D8F1FD6295BB7D9 /* SettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -210,6 +217,7 @@
 				C3132C1ACACDF30D35DFCE22 /* LoginItemManagerTests.swift in Sources */,
 				7FA330F31971526B0FDF87A1 /* RouteMenuModelTests.swift in Sources */,
 				3B89FAA8C0FED43F6A7FA9E1 /* ServeProcessManagerTests.swift in Sources */,
+				2C53D25FBBFE3B26C0BBC739 /* SessionsMenuModelTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

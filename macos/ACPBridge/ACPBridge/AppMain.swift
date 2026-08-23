@@ -33,6 +33,8 @@ struct ACPBridgeApp: App {
     @StateObject private var serveManager = ServeProcessManager()
     @StateObject private var routeMenu = RouteMenuModel()
     @StateObject private var appStatus = AppStatusModel()
+    @StateObject private var sessionsMenu = SessionsMenuModel()
+    @StateObject private var observatoryNavigator = ObservatoryNavigationModel()
     @AppStorage(AppSettingsKeys.showMenuBarExtra) private var showMenuBarExtra = true
 
     init() {
@@ -43,7 +45,7 @@ struct ACPBridgeApp: App {
 
     var body: some Scene {
         WindowGroup(id: MainWindow.id) {
-            ContentView(serveManager: serveManager)
+            ContentView(serveManager: serveManager, navigator: observatoryNavigator)
                 .onAppear { appDelegate.serveManager = serveManager }
         }
         .commands {
@@ -55,9 +57,15 @@ struct ACPBridgeApp: App {
         }
 
         MenuBarExtra(isInserted: $showMenuBarExtra) {
-            MenuBarView(serveManager: serveManager, routeMenu: routeMenu, appStatus: appStatus)
+            MenuBarView(
+                serveManager: serveManager,
+                routeMenu: routeMenu,
+                appStatus: appStatus,
+                sessionsMenu: sessionsMenu,
+                navigator: observatoryNavigator
+            )
         } label: {
-            MenuBarLabel(serveManager: serveManager, routeMenu: routeMenu, appStatus: appStatus)
+            MenuBarLabel(serveManager: serveManager, routeMenu: routeMenu, appStatus: appStatus, sessionsMenu: sessionsMenu)
         }
 
         Settings {
