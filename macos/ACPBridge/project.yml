@@ -1,0 +1,56 @@
+name: ACPBridge
+options:
+  bundleIdPrefix: apps.9191
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Automatic
+    CODE_SIGN_IDENTITY: "-"
+    ENABLE_HARDENED_RUNTIME: NO
+    GENERATE_INFOPLIST_FILE: NO
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  ACPBridge:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: ACPBridge
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: apps.9191.ACPBridge
+        PRODUCT_NAME: ACPBridge
+        INFOPLIST_FILE: ACPBridge/Info.plist
+        SWIFT_EMIT_LOC_STRINGS: NO
+        # Non-sandboxed by design (no entitlements file): the shell must be
+        # able to spawn user-installed backends exactly like the CLI does.
+  ACPBridgeTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: ACPBridgeTests
+    dependencies:
+      - target: ACPBridge
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: apps.9191.ACPBridgeTests
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  ACPBridge:
+    build:
+      targets:
+        ACPBridge: all
+        ACPBridgeTests: [test]
+    test:
+      targets:
+        - ACPBridgeTests
+    run:
+      config: Debug
+    archive:
+      config: Release

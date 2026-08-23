@@ -5,3 +5,9 @@ data/
 tests/.tmp-*/
 .worktrees
 .superpowers/
+
+# Xcode
+macos/ACPBridge/build/
+macos/ACPBridge/DerivedData/
+macos/**/xcuserdata/
+macos/**/*.xcuserdatad/

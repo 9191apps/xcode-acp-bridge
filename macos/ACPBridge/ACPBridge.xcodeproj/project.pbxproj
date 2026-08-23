@@ -1,0 +1,423 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		2569E1667FFA4E3687EC65D5 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07B69233162D9947C861DAE1 /* ContentView.swift */; };
+		3B89FAA8C0FED43F6A7FA9E1 /* ServeProcessManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E8EA607A8F70E437D90B4EB /* ServeProcessManagerTests.swift */; };
+		60B480EAFA97C6ECC6BEE1E8 /* ObservatoryWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B54026BBA02E63F123410C /* ObservatoryWebView.swift */; };
+		6617996B801479CED1386519 /* AppMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = A28288A886881DC80F012C6D /* AppMain.swift */; };
+		C6C99FF8A606C9578FC0C696 /* ApiClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32B0CD1312C0DFCD6DA3F338 /* ApiClient.swift */; };
+		C963AE8E7FF276982B24C881 /* ServeProcessManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC9EFA2F6C6A2D6A65070416 /* ServeProcessManager.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		E9A129E9CF40519C0D202526 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8127D88741A7057388AB7F1C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0D9F0784CB9DECD1EB18CAC5;
+			remoteInfo = ACPBridge;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		07B69233162D9947C861DAE1 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		0EF31249679C57315CE236E7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		2E8EA607A8F70E437D90B4EB /* ServeProcessManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServeProcessManagerTests.swift; sourceTree = "<group>"; };
+		32B0CD1312C0DFCD6DA3F338 /* ApiClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiClient.swift; sourceTree = "<group>"; };
+		5833A075F8F4C3A6CC303BF7 /* ACPBridgeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ACPBridgeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A13B7A32426DBFC1594AE7BF /* ACPBridge.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ACPBridge.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A28288A886881DC80F012C6D /* AppMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMain.swift; sourceTree = "<group>"; };
+		A7B54026BBA02E63F123410C /* ObservatoryWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObservatoryWebView.swift; sourceTree = "<group>"; };
+		DC9EFA2F6C6A2D6A65070416 /* ServeProcessManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServeProcessManager.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		0565000F8E5DBF27F1B951DB /* ACPBridgeTests */ = {
+			isa = PBXGroup;
+			children = (
+				2E8EA607A8F70E437D90B4EB /* ServeProcessManagerTests.swift */,
+			);
+			path = ACPBridgeTests;
+			sourceTree = "<group>";
+		};
+		1248AF4BC36E6C8982C6AF32 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A13B7A32426DBFC1594AE7BF /* ACPBridge.app */,
+				5833A075F8F4C3A6CC303BF7 /* ACPBridgeTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		5BFFACE4F7599AFA42953080 /* ACPBridge */ = {
+			isa = PBXGroup;
+			children = (
+				32B0CD1312C0DFCD6DA3F338 /* ApiClient.swift */,
+				A28288A886881DC80F012C6D /* AppMain.swift */,
+				07B69233162D9947C861DAE1 /* ContentView.swift */,
+				0EF31249679C57315CE236E7 /* Info.plist */,
+				A7B54026BBA02E63F123410C /* ObservatoryWebView.swift */,
+				DC9EFA2F6C6A2D6A65070416 /* ServeProcessManager.swift */,
+			);
+			path = ACPBridge;
+			sourceTree = "<group>";
+		};
+		6ED5F69CB2C7304FCA8C9E3F = {
+			isa = PBXGroup;
+			children = (
+				5BFFACE4F7599AFA42953080 /* ACPBridge */,
+				0565000F8E5DBF27F1B951DB /* ACPBridgeTests */,
+				1248AF4BC36E6C8982C6AF32 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0D9F0784CB9DECD1EB18CAC5 /* ACPBridge */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 58943AB430EF72D60CD2A149 /* Build configuration list for PBXNativeTarget "ACPBridge" */;
+			buildPhases = (
+				BB765060EA21A65701575C3C /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ACPBridge;
+			packageProductDependencies = (
+			);
+			productName = ACPBridge;
+			productReference = A13B7A32426DBFC1594AE7BF /* ACPBridge.app */;
+			productType = "com.apple.product-type.application";
+		};
+		547FC806492584CA94830E17 /* ACPBridgeTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FF58461B6915DCC22B7D5CDD /* Build configuration list for PBXNativeTarget "ACPBridgeTests" */;
+			buildPhases = (
+				CDBA6DCB61ACC1D92756B7C1 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				8748A5145FED511D8F7B2225 /* PBXTargetDependency */,
+			);
+			name = ACPBridgeTests;
+			packageProductDependencies = (
+			);
+			productName = ACPBridgeTests;
+			productReference = 5833A075F8F4C3A6CC303BF7 /* ACPBridgeTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		8127D88741A7057388AB7F1C /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					0D9F0784CB9DECD1EB18CAC5 = {
+						ProvisioningStyle = Automatic;
+					};
+					547FC806492584CA94830E17 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 1280B081B458280E5DF4A52C /* Build configuration list for PBXProject "ACPBridge" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 6ED5F69CB2C7304FCA8C9E3F;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 1248AF4BC36E6C8982C6AF32 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				0D9F0784CB9DECD1EB18CAC5 /* ACPBridge */,
+				547FC806492584CA94830E17 /* ACPBridgeTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		BB765060EA21A65701575C3C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C6C99FF8A606C9578FC0C696 /* ApiClient.swift in Sources */,
+				6617996B801479CED1386519 /* AppMain.swift in Sources */,
+				2569E1667FFA4E3687EC65D5 /* ContentView.swift in Sources */,
+				60B480EAFA97C6ECC6BEE1E8 /* ObservatoryWebView.swift in Sources */,
+				C963AE8E7FF276982B24C881 /* ServeProcessManager.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CDBA6DCB61ACC1D92756B7C1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3B89FAA8C0FED43F6A7FA9E1 /* ServeProcessManagerTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		8748A5145FED511D8F7B2225 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0D9F0784CB9DECD1EB18CAC5 /* ACPBridge */;
+			targetProxy = E9A129E9CF40519C0D202526 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		2681C257073663EA19EB06B5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = apps.9191.ACPBridgeTests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ACPBridge.app/Contents/MacOS/ACPBridge";
+			};
+			name = Release;
+		};
+		591F2C4F10FE8B6E1C16EB96 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		6050749479E5489D8A510251 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		689E641FEA9225488EE0CD8E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = ACPBridge/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = apps.9191.ACPBridge;
+				PRODUCT_NAME = ACPBridge;
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+			};
+			name = Release;
+		};
+		87B93346CD7BFEEB062B0653 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = ACPBridge/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = apps.9191.ACPBridge;
+				PRODUCT_NAME = ACPBridge;
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+			};
+			name = Debug;
+		};
+		94229E89FCCB4C37127CC265 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = apps.9191.ACPBridgeTests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ACPBridge.app/Contents/MacOS/ACPBridge";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1280B081B458280E5DF4A52C /* Build configuration list for PBXProject "ACPBridge" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				591F2C4F10FE8B6E1C16EB96 /* Debug */,
+				6050749479E5489D8A510251 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		58943AB430EF72D60CD2A149 /* Build configuration list for PBXNativeTarget "ACPBridge" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				87B93346CD7BFEEB062B0653 /* Debug */,
+				689E641FEA9225488EE0CD8E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		FF58461B6915DCC22B7D5CDD /* Build configuration list for PBXNativeTarget "ACPBridgeTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				94229E89FCCB4C37127CC265 /* Debug */,
+				2681C257073663EA19EB06B5 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 8127D88741A7057388AB7F1C /* Project object */;
+}

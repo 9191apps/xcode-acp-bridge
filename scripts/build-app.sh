@@ -2,15 +2,32 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="${1:-$ROOT/dist/ACP Bridge.app}"
+XCODE_DIR="$ROOT/macos/ACPBridge"
+DERIVED_DATA="$XCODE_DIR/build"
+
 bun run --cwd "$ROOT" compile:sidecars
+
+# Build the SwiftUI shell (ACPBridge.xcodeproj is checked in; regenerate with
+# `xcodegen generate` from macos/ACPBridge/project.yml if it's ever deleted).
+# Equivalent manual invocation from macos/ACPBridge/:
+#   xcodebuild -project ACPBridge.xcodeproj -scheme ACPBridge \
+#     -configuration Release -derivedDataPath build build
+xcodebuild \
+  -project "$XCODE_DIR/ACPBridge.xcodeproj" \
+  -scheme ACPBridge \
+  -configuration Release \
+  -derivedDataPath "$DERIVED_DATA" \
+  build
+
+SWIFT_BINARY="$DERIVED_DATA/Build/Products/Release/ACPBridge.app/Contents/MacOS/ACPBridge"
+if [ ! -x "$SWIFT_BINARY" ]; then
+  echo "error: expected built binary at $SWIFT_BINARY (xcodebuild did not produce it)" >&2
+  exit 1
+fi
+
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/public"
-# Placeholder executable until Swift build provides ACPBridge — copy a tiny shell wrapper for CI layout check:
-cat > "$APP/Contents/MacOS/ACPBridge" <<'EOF'
-#!/bin/bash
-echo "Swift shell not built yet; use Xcode to build ACPBridge" >&2
-exit 1
-EOF
+cp "$SWIFT_BINARY" "$APP/Contents/MacOS/ACPBridge"
 chmod +x "$APP/Contents/MacOS/ACPBridge"
 cp "$ROOT/dist/sidecars/"* "$APP/Contents/MacOS/"
 cp -R "$ROOT/public/"* "$APP/Contents/Resources/public/"
@@ -34,7 +51,20 @@ cat > "$APP/Contents/Info.plist" <<'EOF'
 	<string>0.1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 </dict>
 </plist>
 EOF
+# Ad-hoc sign so Gatekeeper/LaunchServices treat this as a normal local app
+# (no Developer ID needed for local smoke testing; notarization is a
+# separate distribution step, not part of M1).
+codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || true
 echo "Built $APP"
