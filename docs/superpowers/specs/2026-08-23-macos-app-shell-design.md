@@ -213,11 +213,11 @@ scripts/build-app.sh        # compile sidecars → copy into .app → optional c
 - Start **non-sandboxed** so spawning `~/.local/bin/agent` etc. works like the CLI bridge today.
 - GitHub Releases can ship the `.app` alongside continued source tags.
 
-## Open questions (non-blocking for M1)
+## Resolved decisions (formerly open questions)
 
-1. Single combined binary (`xcode-acp-bridge agent|serve`) vs two sidecars — build-script preference during implementation.
-2. Exact health fingerprint so the shell can tell “our serve” from a random process on 8787.
-3. Whether “Leave server running after Quit” ships in M2 or later.
+1. **Sidecar layout:** **Two sidecars** (`acp-bridge` + `acp-serve`) plus compiled resume helpers (`cursor-acp-resume`, `qoder-acp-resume`) under `Contents/MacOS/`. Implemented in `scripts/compile-sidecars.ts` and `scripts/build-app.sh` — not a single combined `agent|serve` binary.
+2. **Health fingerprint:** `GET /health` returns `{ ok, product: "xcode-acp-bridge", version }`. The Swift shell reuses an existing serve on `:8787` only when `product` matches; otherwise it surfaces `portOccupiedByOther`.
+3. **Leave server running after Quit:** Shipped in **M2** (`SettingsView` toggle, default off). On Quit the shell terminates only the `acp-serve` it spawned; never Xcode-owned `acp-bridge` processes.
 
 ## Done when
 

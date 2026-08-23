@@ -8,7 +8,31 @@ The bridge is **observe-and-forward**: Xcode spawns the bridge as an ACP Agent, 
 
 - [Bun](https://bun.sh) (runtime and package manager)
 
-## Install and run
+## macOS App (menu bar + Observatory)
+
+For day-to-day use without cloning the repo or installing Bun, build the packaged app:
+
+```bash
+./scripts/build-app.sh
+# → dist/ACP Bridge.app
+```
+
+Copy to `/Applications`, launch once (config is seeded under `~/Library/Application Support/ACP Bridge/`), then register the packaged agent in Xcode:
+
+| Field | Value |
+|---|---|
+| Name | `ACP Bridge` |
+| Executable | `…/ACP Bridge.app/Contents/MacOS/acp-bridge` |
+| Interpreter | *(empty)* |
+| Arguments | *(empty)* |
+
+Use **Copy Xcode Agent Paths** in the menu bar or Dock window toolbar for exact paths. Backends (`opencode`, Cursor `agent`, `qodercli`) are still installed separately; the app is non-sandboxed so it can spawn them like the CLI bridge.
+
+Menu bar covers next-conversation route/model (M1), backend status and Settings (M2), and recent-session Set model / Resume / Open in Observatory (M3). The Dock window embeds the same Observatory UI in a WebView.
+
+Full install notes: **[docs/macos-app.md](docs/macos-app.md)**.
+
+## Install and run (developer / CLI)
 
 On a new machine (or after a fresh clone), run the setup script. It checks the Bun runtime, installs dependencies, validates every `acp-bridge.config.json` route command (auto-detecting `opencode` and rewriting missing paths with `--write`), prints the exact Xcode ACP Agent registration values, and health-checks the dashboard:
 
@@ -41,7 +65,18 @@ curl http://127.0.0.1:8787/health
 ## Xcode setup (ACP Agent)
 
 1. Open **Xcode → Settings → Intelligence**.
-2. Choose **Add an ACP Agent** with these absolute paths:
+2. Choose **Add an ACP Agent**:
+
+   **Packaged app** (recommended for installed `.app`):
+
+   | Field | Value |
+   |---|---|
+   | Name | `ACP Bridge` |
+   | Executable | `/Applications/ACP Bridge.app/Contents/MacOS/acp-bridge` |
+   | Interpreter | *(empty)* |
+   | Arguments | *(empty)* |
+
+   **Developer checkout** (Bun + TypeScript):
 
    | Field | Value |
    |---|---|

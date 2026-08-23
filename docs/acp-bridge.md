@@ -26,6 +26,30 @@ Xcode Intelligence 可以通过 **ACP Agent**（stdio JSON-RPC）对接外部 ag
 
 ## 2. 双进程架构
 
+### macOS App（打包 sidecar）
+
+除 CLI 外，仓库还提供 **ACP Bridge.app**：SwiftUI 壳 + Bun `--compile` 的 sidecar，Observatory 仍在 `127.0.0.1:8787`。
+
+```text
+ACP Bridge.app/Contents/MacOS/
+  ACPBridge      ← 菜单栏 / Dock WebView / 生命周期
+  acp-bridge     ← Xcode 拉起（stdio ACP）
+  acp-serve      ← HTTP + 静态 Observatory
+  cursor-acp-resume · qoder-acp-resume
+```
+
+- **构建：** `./scripts/build-app.sh`（先 `compile:sidecars`，再 `xcodebuild` Release，输出 `dist/ACP Bridge.app`）。
+- **可写目录：** `~/Library/Application Support/ACP Bridge/`（首次启动从 bundle 复制默认 config；`data/` 存事件与 route state）。
+- **Xcode 注册：** Executable = `…/Contents/MacOS/acp-bridge`，Interpreter 留空（无 Bun）。
+- **路径发现：** `ACP_BRIDGE_*` 环境变量 → `.app` 布局 → 开发态 `repoRoot()`（`src/acp/paths.ts`）。壳 spawn `acp-serve` 时设 env；Xcode spawn 的 `acp-bridge` 不继承壳 env，靠可执行文件在 bundle 内自解析。
+- **健康指纹：** `GET /health` 返回 `product: "xcode-acp-bridge"`，壳据此区分「自家 serve」与占用 8787 的其它进程。
+- **菜单 M1–M3：** 下一场 route/model · Backend status · Recent sessions（Set model / Resume / Open in Observatory）— 均走现有 HTTP API，不写 `acp-route.json` 磁盘文件。
+- **约束：** 非 sandbox；不捆绑 opencode/agent/qodercli；不自动写 Xcode 偏好。开发者仍可用 `bun run start` / `bun run acp-bridge`。
+
+详见 [macos-app.md](./macos-app.md)。
+
+### CLI / 开发态
+
 ```text
 Xcode (ACP Client)                 Dashboard (bun run start → :8787)
         │ stdio JSON-RPC                      │
