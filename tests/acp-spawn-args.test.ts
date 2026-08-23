@@ -140,6 +140,86 @@ describe("buildResumeLaunchArgs", () => {
     }
   });
 
+  test("env layout inside an app bundle finds the helper beside the app launcher", () => {
+    // The shipping shell sets ACP_BRIDGE_* before launching acp-serve, so the
+    // layout is "env", not "app" — but the helpers still live in
+    // Contents/MacOS next to the launcher, reachable from the Resources dir.
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "acp-resume-"));
+    const contents = path.join(root, "ACP Bridge.app", "Contents");
+    const resources = path.join(contents, "Resources");
+    const helper = path.join(contents, "MacOS", "cursor-acp-resume");
+    fs.mkdirSync(resources, { recursive: true });
+    fs.mkdirSync(path.dirname(helper), { recursive: true });
+    fs.writeFileSync(helper, "#!/bin/sh\n");
+    fs.chmodSync(helper, 0o755);
+    const env = {
+      ACP_BRIDGE_HOME: path.join(root, "home"),
+      ACP_BRIDGE_CONFIG: path.join(root, "home", "acp-bridge.config.json"),
+      ACP_BRIDGE_RESOURCES: resources,
+    };
+
+    try {
+      expect(
+        buildResumeLaunchArgs(
+          { command: "/usr/local/bin/agent", resumeMode: "cursor-acp-load" },
+          "session-3",
+          "/tmp/project",
+          { execPath: path.join(contents, "MacOS", "acp-serve"), env },
+        ),
+      ).toEqual({
+        bin: helper,
+        argv: [
+          "--agent",
+          "/usr/local/bin/agent",
+          "--session-id",
+          "session-3",
+          "--cwd",
+          "/tmp/project",
+        ],
+      });
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("env layout prefers resources/bin over the MacOS sibling", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "acp-resume-"));
+    const contents = path.join(root, "ACP Bridge.app", "Contents");
+    const resources = path.join(contents, "Resources");
+    const preferred = path.join(resources, "bin", "qoder-acp-resume");
+    const sibling = path.join(contents, "MacOS", "qoder-acp-resume");
+    for (const helper of [preferred, sibling]) {
+      fs.mkdirSync(path.dirname(helper), { recursive: true });
+      fs.writeFileSync(helper, "#!/bin/sh\n");
+      fs.chmodSync(helper, 0o755);
+    }
+
+    try {
+      expect(
+        qoderAcpResumeScriptPath({
+          execPath: path.join(contents, "MacOS", "acp-serve"),
+          env: { ACP_BRIDGE_RESOURCES: resources },
+        }),
+      ).toBe(preferred);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("env layout outside a bundle still falls back to the repo script", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "acp-resume-"));
+    try {
+      expect(
+        cursorAcpResumeScriptPath({
+          execPath: "/opt/homebrew/bin/bun",
+          env: { ACP_BRIDGE_HOME: root, ACP_BRIDGE_RESOURCES: root },
+        }),
+      ).toBe(path.join(repoRoot(), "src", "acp", "cursor-acp-resume.ts"));
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("app layout falls back to executable beside the app launcher", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "acp-resume-"));
     const contents = path.join(root, "ACP Bridge.app", "Contents");

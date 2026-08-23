@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { AcpEventStore } from "../src/acp/event-store";
 import type { AcpBridgeConfig } from "../src/acp/types";
@@ -67,5 +69,62 @@ describe("app status", () => {
     expect(typeof body.backends[1].auth.ok).toBe("boolean");
     expect(typeof body.backends[1].auth.authenticated).toBe("boolean");
     expect(typeof body.backends[1].auth.detail).toBe("string");
+  });
+
+  test("GET /api/app/status reuses backend probes within the TTL", async () => {
+    // The backend probes shell out synchronously (`which`, plus `agent status`
+    // / `qodercli status` with 8s timeouts), so repeated menu opens must not
+    // re-spawn them.
+    let probes = 0;
+    const config = testConfig();
+    const instance = createAcpDashboardApp(new AcpEventStore(config.eventsPath), new EventHub(), {
+      config,
+      probeBackends: () => {
+        probes += 1;
+        return [{ name: "opencode", command: "/bin/echo", executable: true }];
+      },
+    });
+
+    const first = await (await instance.request("http://127.0.0.1/api/app/status")).json();
+    const second = await (await instance.request("http://127.0.0.1/api/app/status")).json();
+
+    expect(probes).toBe(1);
+    expect(second.backends).toEqual(first.backends);
+    expect(second.ok).toBe(true);
+  });
+
+  test("GET /api/app/status keeps route state live while backends are cached", async () => {
+    // Route/model come from a cheap JSON read and must not be frozen by the
+    // backend-probe cache.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "acp-status-route-"));
+    let probes = 0;
+    const config: AcpBridgeConfig = {
+      ...testConfig(),
+      eventsPath: path.join(tmp, "acp-events.jsonl"),
+      routeStatePath: path.join(tmp, "acp-route.json"),
+    };
+    const instance = createAcpDashboardApp(new AcpEventStore(config.eventsPath), new EventHub(), {
+      config,
+      probeBackends: () => {
+        probes += 1;
+        return [];
+      },
+    });
+
+    try {
+      await instance.request("http://127.0.0.1/api/app/status");
+      await instance.request("http://127.0.0.1/api/acp-route", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ route: "cursor", model: "composer-2.5" }),
+      });
+      const body = await (await instance.request("http://127.0.0.1/api/app/status")).json();
+
+      expect(probes).toBe(1);
+      expect(body.route).toBe("cursor");
+      expect(body.model).toBe("composer-2.5");
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
   });
 });

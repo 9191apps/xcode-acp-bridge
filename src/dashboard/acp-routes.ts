@@ -14,7 +14,7 @@ import { loadSessionModels, writeSessionModel } from "../acp/session-models";
 import type { AcpRouteState } from "../acp/route-state";
 import type { AcpBackend, AcpBridgeConfig, AcpResumeMode } from "../acp/types";
 import type { AcpEventStore } from "../acp/event-store";
-import { resolveAcpPathLayout } from "../acp/paths";
+import { contentsDirFromExecPath, resolveAcpPathLayout } from "../acp/paths";
 import {
   checkAgentAuth,
   checkQodercliAuth,
@@ -23,12 +23,15 @@ import {
 } from "../setup-check";
 import packageJson from "../../package.json";
 import { EventHub } from "./events";
+import { createTtlCache } from "./ttl-cache";
 
 const PRODUCT = "xcode-acp-bridge";
 const VERSION = packageJson.version;
 
 export type AcpDashboardDeps = {
   config: AcpBridgeConfig;
+  /** Overrides the (process-spawning) backend detection for tests. */
+  probeBackends?: (config: AcpBridgeConfig) => BackendStatusEntry[];
   openTerminal?: (
     bin: string,
     sessionId: string,
@@ -59,14 +62,28 @@ function isExecutable(filePath: string): boolean {
   }
 }
 
+/** …/Contents/MacOS/<name>, derived from a …/Contents/Resources path. */
+function macOSSiblingOfResources(resources: string, name: string): string | null {
+  if (path.basename(resources) !== "Resources") return null;
+  return path.join(path.dirname(resources), "MacOS", name);
+}
+
 function acpResumeHelperPath(name: "cursor-acp-resume" | "qoder-acp-resume", opts?: ResumePathOptions): string {
   const layout = resolveAcpPathLayout(opts);
-  const resourceHelper = path.join(layout.resources, "bin", name);
-  if (isExecutable(resourceHelper)) return resourceHelper;
-
-  if (layout.mode === "app") {
-    const appHelper = path.join(path.dirname(layout.resources), "MacOS", name);
-    if (isExecutable(appHelper)) return appHelper;
+  // `build-app.sh` ships the compiled helpers in Contents/MacOS beside the app
+  // launcher, so the bundle has to be found from either end: the packaged shell
+  // launches acp-serve with ACP_BRIDGE_* set (layout mode "env", bundle known
+  // only via ACP_BRIDGE_RESOURCES), while a directly-launched bundled binary
+  // gets mode "app" (bundle known via execPath). Resources/bin stays first so a
+  // future non-bundle install layout keeps working.
+  const contentsFromExecPath = contentsDirFromExecPath(opts?.execPath ?? process.execPath);
+  const candidates = [
+    path.join(layout.resources, "bin", name),
+    macOSSiblingOfResources(layout.resources, name),
+    contentsFromExecPath ? path.join(contentsFromExecPath, "MacOS", name) : null,
+  ];
+  for (const candidate of candidates) {
+    if (candidate && isExecutable(candidate)) return candidate;
   }
 
   return path.join(repoRoot(), "src", "acp", `${name}.ts`);
@@ -213,6 +230,42 @@ function routeResponse(config: AcpBridgeConfig): {
   };
 }
 
+export type BackendStatusEntry = {
+  name: string;
+  command: string;
+  executable: boolean;
+  auth?: { ok: boolean; authenticated: boolean; detail: string };
+};
+
+/**
+ * How long a backend probe result is reused. Each probe shells out
+ * synchronously (`which`, plus `agent status` / `qodercli status`, each up to
+ * an 8s timeout), so an uncached `/api/app/status` can block the event loop for
+ * seconds. The menu bar re-reads this endpoint on every open, and backend
+ * install/login state changes on a human timescale, so a 30s window keeps the
+ * menu honest while collapsing bursts of opens into one probe.
+ */
+export const APP_STATUS_PROBE_TTL_MS = 30_000;
+
+function probeBackends(config: AcpBridgeConfig): BackendStatusEntry[] {
+  return Object.entries(config.routes).map(([name, backend]) => {
+    const detected = detectBackendBinary(name, backend.command);
+    const command = detected ?? backend.command;
+    const base = path.basename(backend.command);
+    const status: BackendStatusEntry = {
+      name,
+      command,
+      executable: hasExecutable(command),
+    };
+    if (name === "cursor" || base === "agent" || base === "cursor-agent") {
+      status.auth = checkAgentAuth(command);
+    } else if (name === "qodercli" || base === "qodercli" || base === "qoder") {
+      status.auth = checkQodercliAuth(command);
+    }
+    return status;
+  });
+}
+
 export function createAcpDashboardApp(
   store: AcpEventStore,
   hub?: EventHub,
@@ -231,29 +284,17 @@ export function createAcpDashboardApp(
     return c.json({ ok: true, product: PRODUCT, version: VERSION });
   });
 
+  // Route/model stay live (a cheap JSON read); only the process-spawning
+  // backend probes are cached. See APP_STATUS_PROBE_TTL_MS.
+  const probe = deps.probeBackends ?? probeBackends;
+  const backendStatusCache = createTtlCache({
+    ttlMs: APP_STATUS_PROBE_TTL_MS,
+    load: () => probe(config),
+  });
+
   app.get("/api/app/status", (c) => {
     const route = routeResponse(config);
-    const backends = Object.entries(config.routes).map(([name, backend]) => {
-      const detected = detectBackendBinary(name, backend.command);
-      const command = detected ?? backend.command;
-      const base = path.basename(backend.command);
-      const status: {
-        name: string;
-        command: string;
-        executable: boolean;
-        auth?: { ok: boolean; authenticated: boolean; detail: string };
-      } = {
-        name,
-        command,
-        executable: hasExecutable(command),
-      };
-      if (name === "cursor" || base === "agent" || base === "cursor-agent") {
-        status.auth = checkAgentAuth(command);
-      } else if (name === "qodercli" || base === "qodercli" || base === "qoder") {
-        status.auth = checkQodercliAuth(command);
-      }
-      return status;
-    });
+    const backends = backendStatusCache.get();
     const ok = backends.every(
       (backend) =>
         backend.executable &&

@@ -29,6 +29,10 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/public"
 cp "$SWIFT_BINARY" "$APP/Contents/MacOS/ACPBridge"
 chmod +x "$APP/Contents/MacOS/ACPBridge"
+# All sidecars (acp-bridge, acp-serve, and the two resume helpers) live in
+# Contents/MacOS — each is a ~100MB `bun build --compile` binary, so they are
+# deliberately not also copied under Resources/bin. `acpResumeHelperPath`
+# resolves the resume helpers from here via the Resources sibling directory.
 cp "$ROOT/dist/sidecars/"* "$APP/Contents/MacOS/"
 cp -R "$ROOT/public/"* "$APP/Contents/Resources/public/"
 cp "$ROOT/acp-bridge.config.json" "$APP/Contents/Resources/acp-bridge.config.default.json"
