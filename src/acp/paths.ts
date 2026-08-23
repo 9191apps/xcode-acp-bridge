@@ -62,3 +62,7 @@ export function resolveAcpPathLayout(opts?: {
     configPath: path.join(repoFallback, "acp-bridge.config.json"),
   };
 }
+
+export function publicDir(opts?: Parameters<typeof resolveAcpPathLayout>[0]): string {
+  return path.resolve(path.join(resolveAcpPathLayout(opts).resources, "public"));
+}

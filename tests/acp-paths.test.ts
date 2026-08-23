@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { resolveAcpPathLayout } from "../src/acp/paths";
+import { publicDir, resolveAcpPathLayout } from "../src/acp/paths";
 
 describe("resolveAcpPathLayout", () => {
   test("env ACP_BRIDGE_HOME + CONFIG + RESOURCES wins", () => {
@@ -37,6 +37,12 @@ describe("resolveAcpPathLayout", () => {
     expect(layout.resources).toBe(resources);
     expect(layout.home).toBe(path.join(os.homedir(), "Library", "Application Support", "ACP Bridge"));
     expect(layout.configPath).toBe(path.join(layout.home, "acp-bridge.config.json"));
+  });
+
+  test("publicDir joins resources/public", () => {
+    expect(
+      publicDir({ env: { ACP_BRIDGE_RESOURCES: "/tmp/res" }, repoFallback: "/repo" }),
+    ).toBe("/tmp/res/public");
   });
 
   test("otherwise uses repoFallback", () => {

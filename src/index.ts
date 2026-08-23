@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { serveStatic } from "hono/bun";
 import { loadAcpBridgeConfig } from "./acp/config";
 import { AcpEventStore } from "./acp/event-store";
+import { publicDir } from "./acp/paths";
 import { startAcpTail } from "./acp/tail";
 import { config } from "./config";
 import { createAcpDashboardApp } from "./dashboard/acp-routes";
@@ -16,7 +17,7 @@ startAcpTail(acpStore, (e) => acpHub.publishNamed("acp", e));
 
 const app = new Hono();
 app.route("/", createAcpDashboardApp(acpStore, acpHub, { config: acpCfg }));
-app.use("/*", serveStatic({ root: "./public" }));
+app.use("/*", serveStatic({ root: publicDir() }));
 
 try {
   Bun.serve({ hostname: config.host, port: config.port, fetch: app.fetch });
