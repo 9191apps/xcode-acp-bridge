@@ -2,6 +2,7 @@
   "name": "xcode-acp-bridge",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "bun run --watch src/index.ts",
