@@ -173,4 +173,4 @@ bun test
 
 ## License
 
-[MIT](LICENSE) © 2026 91Apps
+[MIT](LICENSE) © 2026 9191apps
