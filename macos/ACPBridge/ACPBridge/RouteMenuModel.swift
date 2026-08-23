@@ -57,27 +57,44 @@ final class RouteMenuModel: ObservableObject {
     /// the new route's model list is reloaded afterwards.
     func setRoute(_ name: String) async throws {
         guard routes.contains(name) else {
-            throw RouteMenuError.unknownRoute(name)
+            let error = RouteMenuError.unknownRoute(name)
+            lastError = error.localizedDescription
+            throw error
         }
-        let response = try await apiClient.putAcpRoute(route: name, model: nil)
-        routes = response.routes
-        currentRoute = response.route
-        currentModel = response.model
-        lastError = nil
-        await refreshModels(for: response.route)
+        do {
+            let response = try await apiClient.putAcpRoute(route: name, model: nil)
+            routes = response.routes
+            currentRoute = response.route
+            currentModel = response.model
+            lastError = nil
+            await refreshModels(for: response.route)
+        } catch {
+            // Callers (the menu's Button actions) fire-and-forget this with
+            // `try?`, so `lastError` is the only surface a failed PUT gets —
+            // set it here rather than only inside `refresh()`.
+            lastError = error.localizedDescription
+            throw error
+        }
     }
 
     /// Sets (`id` non-nil) or clears (`id` nil) the model for the current
     /// route. Requires a prior successful `refresh()`/`setRoute()`.
     func setModel(_ id: String?) async throws {
         guard let route = currentRoute else {
-            throw RouteMenuError.notLoaded
+            let error = RouteMenuError.notLoaded
+            lastError = error.localizedDescription
+            throw error
         }
-        let response = try await apiClient.putAcpRoute(route: route, model: id)
-        routes = response.routes
-        currentRoute = response.route
-        currentModel = response.model
-        lastError = nil
+        do {
+            let response = try await apiClient.putAcpRoute(route: route, model: id)
+            routes = response.routes
+            currentRoute = response.route
+            currentModel = response.model
+            lastError = nil
+        } catch {
+            lastError = error.localizedDescription
+            throw error
+        }
     }
 
     private func refreshModels(for route: String) async {

@@ -1,13 +1,15 @@
 import SwiftUI
 
-/// MenuBarExtra content — M1 subset of the design's menu information
-/// architecture (Next conversation route/model + baseline actions).
-/// "Recent sessions" (Task 10) and "Backend status" / "Settings…" (Task 9)
-/// are intentionally out of scope here.
+/// MenuBarExtra content — the design's full M1+M2 menu information
+/// architecture (Next conversation route/model, Backend status, Settings…,
+/// baseline actions). "Recent sessions" (Task 10) is intentionally still out
+/// of scope here.
 struct MenuBarView: View {
     @ObservedObject var serveManager: ServeProcessManager
     @ObservedObject var routeMenu: RouteMenuModel
+    @ObservedObject var appStatus: AppStatusModel
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
 
     private var mutatingItemsDisabled: Bool {
         !serveManager.isRunning || routeMenu.isLoading
@@ -15,6 +17,9 @@ struct MenuBarView: View {
 
     var body: some View {
         statusHeader
+        if let lastError = routeMenu.lastError {
+            Text(lastError)
+        }
         Menu("Next conversation") {
             routeSubmenu
             modelSubmenu
@@ -29,10 +34,14 @@ struct MenuBarView: View {
                 openWindow(id: MainWindow.id)
             }
         }
+        backendStatusSubmenu
         Button("Copy Xcode Agent Paths") {
             AgentPaths.copyToPasteboard()
         }
         Divider()
+        Button("Settings…") {
+            openSettings()
+        }
         Button("Quit ACP Bridge") {
             NSApp.terminate(nil)
         }
@@ -44,6 +53,29 @@ struct MenuBarView: View {
             Text("ACP Bridge — Running")
         } else {
             Text("ACP Bridge — Starting…")
+        }
+    }
+
+    @ViewBuilder
+    private var backendStatusSubmenu: some View {
+        Menu("Backend status") {
+            if let error = appStatus.lastError {
+                Text(error)
+            } else if appStatus.backends.isEmpty {
+                Text("Loading…")
+            } else {
+                ForEach(appStatus.backends, id: \.name) { backend in
+                    backendStatusRows(backend)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func backendStatusRows(_ backend: BackendStatus) -> some View {
+        Text("\(backend.name): \(backend.executable ? "found" : "not found") — \(backend.command)")
+        if let auth = backend.auth {
+            Text("  \(auth.authenticated ? "Signed in" : "Not signed in") — \(auth.detail)")
         }
     }
 
@@ -100,12 +132,14 @@ struct MenuBarView: View {
 struct MenuBarLabel: View {
     @ObservedObject var serveManager: ServeProcessManager
     @ObservedObject var routeMenu: RouteMenuModel
+    @ObservedObject var appStatus: AppStatusModel
 
     var body: some View {
         Image(systemName: serveManager.isRunning ? "bolt.circle.fill" : "bolt.circle")
             .task(id: serveManager.isRunning) {
                 guard serveManager.isRunning else { return }
                 await routeMenu.refresh()
+                await appStatus.refresh()
             }
     }
 }

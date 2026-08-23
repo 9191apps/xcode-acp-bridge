@@ -8,14 +8,21 @@
 
 /* Begin PBXBuildFile section */
 		2569E1667FFA4E3687EC65D5 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07B69233162D9947C861DAE1 /* ContentView.swift */; };
+		36E854B48D8F1FD6295BB7D9 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAD39E64E314146E18802817 /* SettingsView.swift */; };
+		38014B13D1B2B8D4315E26F8 /* AppSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDBB99101E332995C3294134 /* AppSettingsTests.swift */; };
 		3B89FAA8C0FED43F6A7FA9E1 /* ServeProcessManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E8EA607A8F70E437D90B4EB /* ServeProcessManagerTests.swift */; };
 		4E20A72B27A99B0A4C774539 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD31E93CA58CB52435CB32DA /* MenuBarView.swift */; };
 		60B480EAFA97C6ECC6BEE1E8 /* ObservatoryWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B54026BBA02E63F123410C /* ObservatoryWebView.swift */; };
 		6617996B801479CED1386519 /* AppMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = A28288A886881DC80F012C6D /* AppMain.swift */; };
+		6DA24DCE806CC5CD16B09347 /* AppStatusModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2361E78D892861DD2C727C8 /* AppStatusModelTests.swift */; };
 		7FA330F31971526B0FDF87A1 /* RouteMenuModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4F3705208D17FCCDA77490F /* RouteMenuModelTests.swift */; };
 		90408F7FD1901C8F5C49FCD8 /* RouteMenuModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DF2F15AF9660A7328232389 /* RouteMenuModel.swift */; };
+		B53A09CD73F6EE06744D4C6E /* LoginItemManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4535EB8F1B98C3DAC4223F70 /* LoginItemManager.swift */; };
+		BA02702DC314D31E42470FEF /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96C6521092DA679D2926069A /* AppSettings.swift */; };
+		C3132C1ACACDF30D35DFCE22 /* LoginItemManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50753ABB7ABF8468E9262882 /* LoginItemManagerTests.swift */; };
 		C6C99FF8A606C9578FC0C696 /* ApiClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32B0CD1312C0DFCD6DA3F338 /* ApiClient.swift */; };
 		C963AE8E7FF276982B24C881 /* ServeProcessManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC9EFA2F6C6A2D6A65070416 /* ServeProcessManager.swift */; };
+		D6E7EFC5883B31D50B261729 /* AppStatusModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96035CE7AB60BE8B2B5F1259 /* AppStatusModel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -33,20 +40,30 @@
 		0EF31249679C57315CE236E7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		2E8EA607A8F70E437D90B4EB /* ServeProcessManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServeProcessManagerTests.swift; sourceTree = "<group>"; };
 		32B0CD1312C0DFCD6DA3F338 /* ApiClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiClient.swift; sourceTree = "<group>"; };
+		4535EB8F1B98C3DAC4223F70 /* LoginItemManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemManager.swift; sourceTree = "<group>"; };
+		50753ABB7ABF8468E9262882 /* LoginItemManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemManagerTests.swift; sourceTree = "<group>"; };
 		5833A075F8F4C3A6CC303BF7 /* ACPBridgeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ACPBridgeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		96035CE7AB60BE8B2B5F1259 /* AppStatusModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStatusModel.swift; sourceTree = "<group>"; };
+		96C6521092DA679D2926069A /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		9DF2F15AF9660A7328232389 /* RouteMenuModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteMenuModel.swift; sourceTree = "<group>"; };
 		A13B7A32426DBFC1594AE7BF /* ACPBridge.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ACPBridge.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A28288A886881DC80F012C6D /* AppMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMain.swift; sourceTree = "<group>"; };
 		A4F3705208D17FCCDA77490F /* RouteMenuModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteMenuModelTests.swift; sourceTree = "<group>"; };
 		A7B54026BBA02E63F123410C /* ObservatoryWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObservatoryWebView.swift; sourceTree = "<group>"; };
+		AAD39E64E314146E18802817 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		BDBB99101E332995C3294134 /* AppSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsTests.swift; sourceTree = "<group>"; };
 		CD31E93CA58CB52435CB32DA /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
 		DC9EFA2F6C6A2D6A65070416 /* ServeProcessManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServeProcessManager.swift; sourceTree = "<group>"; };
+		E2361E78D892861DD2C727C8 /* AppStatusModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStatusModelTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
 		0565000F8E5DBF27F1B951DB /* ACPBridgeTests */ = {
 			isa = PBXGroup;
 			children = (
+				BDBB99101E332995C3294134 /* AppSettingsTests.swift */,
+				E2361E78D892861DD2C727C8 /* AppStatusModelTests.swift */,
+				50753ABB7ABF8468E9262882 /* LoginItemManagerTests.swift */,
 				A4F3705208D17FCCDA77490F /* RouteMenuModelTests.swift */,
 				2E8EA607A8F70E437D90B4EB /* ServeProcessManagerTests.swift */,
 			);
@@ -67,12 +84,16 @@
 			children = (
 				32B0CD1312C0DFCD6DA3F338 /* ApiClient.swift */,
 				A28288A886881DC80F012C6D /* AppMain.swift */,
+				96C6521092DA679D2926069A /* AppSettings.swift */,
+				96035CE7AB60BE8B2B5F1259 /* AppStatusModel.swift */,
 				07B69233162D9947C861DAE1 /* ContentView.swift */,
 				0EF31249679C57315CE236E7 /* Info.plist */,
+				4535EB8F1B98C3DAC4223F70 /* LoginItemManager.swift */,
 				CD31E93CA58CB52435CB32DA /* MenuBarView.swift */,
 				A7B54026BBA02E63F123410C /* ObservatoryWebView.swift */,
 				9DF2F15AF9660A7328232389 /* RouteMenuModel.swift */,
 				DC9EFA2F6C6A2D6A65070416 /* ServeProcessManager.swift */,
+				AAD39E64E314146E18802817 /* SettingsView.swift */,
 			);
 			path = ACPBridge;
 			sourceTree = "<group>";
@@ -168,11 +189,15 @@
 			files = (
 				C6C99FF8A606C9578FC0C696 /* ApiClient.swift in Sources */,
 				6617996B801479CED1386519 /* AppMain.swift in Sources */,
+				BA02702DC314D31E42470FEF /* AppSettings.swift in Sources */,
+				D6E7EFC5883B31D50B261729 /* AppStatusModel.swift in Sources */,
 				2569E1667FFA4E3687EC65D5 /* ContentView.swift in Sources */,
+				B53A09CD73F6EE06744D4C6E /* LoginItemManager.swift in Sources */,
 				4E20A72B27A99B0A4C774539 /* MenuBarView.swift in Sources */,
 				60B480EAFA97C6ECC6BEE1E8 /* ObservatoryWebView.swift in Sources */,
 				90408F7FD1901C8F5C49FCD8 /* RouteMenuModel.swift in Sources */,
 				C963AE8E7FF276982B24C881 /* ServeProcessManager.swift in Sources */,
+				36E854B48D8F1FD6295BB7D9 /* SettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -180,6 +205,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				38014B13D1B2B8D4315E26F8 /* AppSettingsTests.swift in Sources */,
+				6DA24DCE806CC5CD16B09347 /* AppStatusModelTests.swift in Sources */,
+				C3132C1ACACDF30D35DFCE22 /* LoginItemManagerTests.swift in Sources */,
 				7FA330F31971526B0FDF87A1 /* RouteMenuModelTests.swift in Sources */,
 				3B89FAA8C0FED43F6A7FA9E1 /* ServeProcessManagerTests.swift in Sources */,
 			);

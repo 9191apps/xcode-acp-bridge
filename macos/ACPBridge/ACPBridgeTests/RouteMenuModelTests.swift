@@ -147,6 +147,56 @@ final class RouteMenuModelTests: XCTestCase {
         XCTAssertNil(model.currentModel)
     }
 
+    func testSetRouteFailurePublishesLastError() async {
+        let model = makeModel { request in
+            if request.url!.path == "/api/acp-route" && request.httpMethod == "GET" {
+                return Self.jsonResponse(
+                    request.url!,
+                    #"{"route":"opencode","defaultRoute":"opencode","routes":["opencode","cursor"],"source":"state","model":null}"#
+                )
+            }
+            // The PUT itself fails (e.g. acp-serve dropped between the menu
+            // opening and the click) — should not be silently swallowed.
+            throw NSError(domain: NSURLErrorDomain, code: NSURLErrorCannotConnectToHost)
+        }
+        await model.refresh()
+        XCTAssertNil(model.lastError)
+
+        do {
+            try await model.setRoute("cursor")
+            XCTFail("expected error")
+        } catch {
+            XCTAssertNotNil(model.lastError)
+        }
+    }
+
+    func testSetModelFailurePublishesLastError() async {
+        let model = makeModel { request in
+            if request.url!.path == "/api/acp-route" && request.httpMethod == "GET" {
+                return Self.jsonResponse(
+                    request.url!,
+                    #"{"route":"opencode","defaultRoute":"opencode","routes":["opencode"],"source":"state","model":null}"#
+                )
+            }
+            if request.url!.path == "/api/acp-models" {
+                return Self.jsonResponse(
+                    request.url!,
+                    #"{"route":"opencode","models":[],"source":"none","current":null}"#
+                )
+            }
+            throw NSError(domain: NSURLErrorDomain, code: NSURLErrorCannotConnectToHost)
+        }
+        await model.refresh()
+        XCTAssertNil(model.lastError)
+
+        do {
+            try await model.setModel("gpt-5")
+            XCTFail("expected error")
+        } catch {
+            XCTAssertNotNil(model.lastError)
+        }
+    }
+
     func testSetModelThrowsNotLoadedBeforeFirstRefresh() async {
         let client = ApiClient(session: MockURLProtocol.makeSession())
         let model = RouteMenuModel(apiClient: client)

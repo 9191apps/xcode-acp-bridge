@@ -31,6 +31,36 @@ struct AcpModels: Decodable, Equatable {
     let current: String?
 }
 
+/// Per-backend auth-probe detail nested in `AppStatus.backends`, present only
+/// for backends that support an auth check (currently `cursor`/`qodercli`).
+struct BackendAuthStatus: Decodable, Equatable {
+    let ok: Bool
+    let authenticated: Bool
+    let detail: String
+}
+
+/// One entry of `AppStatus.backends` — a configured route's backend
+/// executable + (when applicable) auth status.
+struct BackendStatus: Decodable, Equatable {
+    let name: String
+    let command: String
+    let executable: Bool
+    let auth: BackendAuthStatus?
+}
+
+/// `GET /api/app/status` response shape — overall health plus per-backend
+/// executable/auth detail, for the MenuBarExtra's "Backend status" submenu.
+struct AppStatus: Decodable, Equatable {
+    let ok: Bool
+    let product: String
+    let version: String
+    let route: String
+    let model: String?
+    let routes: [String]
+    let backends: [BackendStatus]
+    let layoutMode: String
+}
+
 enum ApiClientError: Error, Equatable {
     case invalidResponse
     case http(Int)
@@ -72,6 +102,12 @@ struct ApiClient {
         }
         request.httpBody = try JSONEncoder().encode(body)
         return try await send(request)
+    }
+
+    /// Reads overall backend status (per-route executable + auth detail) for
+    /// the MenuBarExtra's "Backend status" submenu.
+    func appStatus() async throws -> AppStatus {
+        try await send(URLRequest(url: baseURL.appendingPathComponent("api/app/status")))
     }
 
     /// Lists known/observed models for `route`.
