@@ -1,12 +1,6 @@
 import SwiftUI
 import AppKit
 
-enum ShellState: Equatable {
-    case launching
-    case ready
-    case failed(String)
-}
-
 /// Builds the "Copy Xcode Agent paths" pasteboard text. Pure/testable —
 /// no AppKit dependency beyond the bundle URL that's passed in.
 enum AgentPaths {
@@ -28,23 +22,35 @@ enum AgentPaths {
     }
 }
 
+/// One navigation request, identified rather than compared by URL: the
+/// WebView treats `id` as a token it consumes, so an unrelated re-render can't
+/// re-issue a load, while navigating twice to the *same* URL still does.
+struct ObservatoryNavigation: Equatable {
+    let id: UUID
+    let url: URL
+
+    init(url: URL, id: UUID = UUID()) {
+        self.id = id
+        self.url = url
+    }
+}
+
 /// Shared Observatory navigation target — lets the MenuBarExtra's "Open in
 /// Observatory" action (Task 10) steer the Dock window's `WKWebView` to a
 /// specific conversation without either view knowing about the other
 /// directly. Defaults to the Observatory root.
 @MainActor
 final class ObservatoryNavigationModel: ObservableObject {
-    @Published private(set) var targetURL: URL = ApiClient.defaultBaseURL
+    @Published private(set) var request = ObservatoryNavigation(url: ApiClient.defaultBaseURL)
 
     func navigate(to url: URL) {
-        targetURL = url
+        request = ObservatoryNavigation(url: url)
     }
 }
 
 struct ContentView: View {
     @ObservedObject var serveManager: ServeProcessManager
     @ObservedObject var navigator: ObservatoryNavigationModel
-    @State private var state: ShellState = .launching
     @State private var copyConfirmation = false
 
     var body: some View {
@@ -54,7 +60,9 @@ struct ContentView: View {
             content
         }
         .frame(minWidth: 960, minHeight: 640)
-        .task { await start() }
+        // The delegate already kicked this off at launch; calling again is a
+        // no-op unless a previous attempt failed or the server was shut down.
+        .task { await serveManager.start() }
     }
 
     private var toolbar: some View {
@@ -81,8 +89,8 @@ struct ContentView: View {
 
     @ViewBuilder
     private var statusLabel: some View {
-        switch state {
-        case .launching:
+        switch serveManager.state {
+        case .idle, .launching:
             Label("Starting…", systemImage: "circle.dotted")
                 .foregroundStyle(.secondary)
         case .ready:
@@ -96,12 +104,12 @@ struct ContentView: View {
 
     @ViewBuilder
     private var content: some View {
-        switch state {
-        case .launching:
+        switch serveManager.state {
+        case .idle, .launching:
             ProgressView("Starting ACP Bridge…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .ready:
-            ObservatoryWebView(url: navigator.targetURL)
+            ObservatoryWebView(navigation: navigator.request)
         case .failed(let message):
             errorView(message)
         }
@@ -116,21 +124,11 @@ struct ContentView: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 480)
             Button("Retry") {
-                Task { await start() }
+                Task { await serveManager.start() }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
-    }
-
-    private func start() async {
-        state = .launching
-        do {
-            try await serveManager.ensureRunning()
-            state = .ready
-        } catch {
-            state = .failed(error.localizedDescription)
-        }
     }
 }
 

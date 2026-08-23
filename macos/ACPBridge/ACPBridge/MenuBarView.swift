@@ -180,22 +180,53 @@ struct MenuBarView: View {
     }
 }
 
+/// Reloads everything the menu renders. Menu *content* views don't reliably
+/// receive SwiftUI lifecycle events, so nothing refreshes when the user opens
+/// the menu — the label drives this instead, on a timer.
+enum MenuDataRefresher {
+    /// Chosen against how the data ages: route/model change only when the user
+    /// changes them (in this menu or the Observatory), and sessions change when
+    /// Xcode spawns a bridge. `/api/app/status`'s backend probes are cached
+    /// server-side for 30s, so polling faster mostly re-reads that cache.
+    static let interval: Duration = .seconds(20)
+
+    static func refreshAll(
+        routeMenu: RouteMenuModel,
+        appStatus: AppStatusModel,
+        sessionsMenu: SessionsMenuModel
+    ) async {
+        await routeMenu.refresh()
+        await appStatus.refresh()
+        await sessionsMenu.refresh()
+    }
+}
+
 /// MenuBarExtra label — a plain `View`, unlike the menu content, so it
-/// reliably receives SwiftUI lifecycle events. Used to trigger the initial
-/// (and post-health-check) `RouteMenuModel.refresh()`.
+/// reliably receives SwiftUI lifecycle events. Runs the initial (and
+/// post-health-check) refresh, then keeps the menu current on a timer.
 struct MenuBarLabel: View {
     @ObservedObject var serveManager: ServeProcessManager
     @ObservedObject var routeMenu: RouteMenuModel
     @ObservedObject var appStatus: AppStatusModel
     @ObservedObject var sessionsMenu: SessionsMenuModel
+    var refreshInterval: Duration = MenuDataRefresher.interval
 
     var body: some View {
         Image(systemName: serveManager.isRunning ? "bolt.circle.fill" : "bolt.circle")
             .task(id: serveManager.isRunning) {
                 guard serveManager.isRunning else { return }
-                await routeMenu.refresh()
-                await appStatus.refresh()
-                await sessionsMenu.refresh()
+                while !Task.isCancelled {
+                    await MenuDataRefresher.refreshAll(
+                        routeMenu: routeMenu,
+                        appStatus: appStatus,
+                        sessionsMenu: sessionsMenu
+                    )
+                    do {
+                        try await Task.sleep(for: refreshInterval)
+                    } catch {
+                        return
+                    }
+                }
             }
     }
 }

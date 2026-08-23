@@ -151,6 +151,112 @@ final class ServeDecisionMakerTests: XCTestCase {
     }
 }
 
+/// `start()` is the app delegate's entry point, so its published `state` — not
+/// a view's `@State` — is what the window renders.
+@MainActor
+final class ServeProcessManagerStateTests: XCTestCase {
+    override func tearDown() {
+        MockURLProtocol.handler = nil
+        MockURLProtocol.errorToThrow = nil
+        super.tearDown()
+    }
+
+    private func makeManager() -> ServeProcessManager {
+        ServeProcessManager(apiClient: ApiClient(session: MockURLProtocol.makeSession()))
+    }
+
+    func testStartPublishesReadyWhenAnExistingServerIsOurs() async {
+        MockURLProtocol.handler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, #"{"ok":true,"product":"xcode-acp-bridge","version":"0.1.0"}"#.data(using: .utf8)!)
+        }
+        let manager = makeManager()
+        XCTAssertEqual(manager.state, .idle)
+
+        await manager.start()
+
+        XCTAssertEqual(manager.state, .ready)
+        XCTAssertTrue(manager.isRunning)
+    }
+
+    func testStartPublishesFailedWhenThePortBelongsToAnotherProcess() async {
+        MockURLProtocol.handler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, #"{"ok":true,"product":"some-other-tool","version":"9.9.9"}"#.data(using: .utf8)!)
+        }
+        let manager = makeManager()
+
+        await manager.start()
+
+        XCTAssertEqual(
+            manager.state,
+            .failed(ServeError.portOccupiedByOther("some-other-tool").localizedDescription)
+        )
+        XCTAssertFalse(manager.isRunning)
+    }
+
+    func testStartIsIdempotentOnceReady() async {
+        var healthRequests = 0
+        MockURLProtocol.handler = { request in
+            healthRequests += 1
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, #"{"ok":true,"product":"xcode-acp-bridge","version":"0.1.0"}"#.data(using: .utf8)!)
+        }
+        let manager = makeManager()
+
+        await manager.start()
+        await manager.start()
+
+        XCTAssertEqual(healthRequests, 1, "a second start() while ready should not re-probe")
+        XCTAssertEqual(manager.state, .ready)
+    }
+
+    func testShutdownReturnsToIdleSoStartCanRunAgain() async {
+        MockURLProtocol.handler = { request in
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (response, #"{"ok":true,"product":"xcode-acp-bridge","version":"0.1.0"}"#.data(using: .utf8)!)
+        }
+        let manager = makeManager()
+        await manager.start()
+
+        manager.shutdown()
+
+        XCTAssertEqual(manager.state, .idle)
+        XCTAssertFalse(manager.isRunning)
+    }
+}
+
+final class ObservatoryNavigationTests: XCTestCase {
+    @MainActor
+    func testNavigatingToTheSameURLTwiceProducesDistinctTokens() {
+        let navigator = ObservatoryNavigationModel()
+        let url = URL(string: "http://127.0.0.1:8787/conversation.html?pid=42")!
+
+        navigator.navigate(to: url)
+        let first = navigator.request
+        navigator.navigate(to: url)
+        let second = navigator.request
+
+        XCTAssertEqual(first.url, second.url)
+        XCTAssertNotEqual(first.id, second.id, "a repeated request must still re-navigate")
+    }
+
+    func testWebViewLoadsEachNavigationTokenExactlyOnce() {
+        // An unrelated ContentView re-render (Copy Paths confirmation, status
+        // change) re-sends the same navigation and must not yank the WebView
+        // back from wherever the user browsed to.
+        let coordinator = ObservatoryWebView.Coordinator()
+        let navigation = ObservatoryNavigation(url: URL(string: "http://127.0.0.1:8787/")!)
+
+        XCTAssertTrue(coordinator.shouldLoad(navigation))
+        coordinator.loadedNavigationID = navigation.id
+        XCTAssertFalse(coordinator.shouldLoad(navigation))
+        XCTAssertTrue(
+            coordinator.shouldLoad(ObservatoryNavigation(url: URL(string: "http://127.0.0.1:8787/")!))
+        )
+    }
+}
+
 final class AgentPathsTests: XCTestCase {
     func testExecutablePathPointsAtBundledAcpBridge() {
         let bundleURL = URL(fileURLWithPath: "/Applications/ACP Bridge.app")

@@ -78,9 +78,19 @@ enum ServeDecisionMaker {
     }
 }
 
+/// Lifecycle of the managed `acp-serve` process, published so any view can
+/// render it — the window is only one possible observer, and may never open.
+enum ServeState: Equatable {
+    case idle
+    case launching
+    case ready
+    case failed(String)
+}
+
 @MainActor
 final class ServeProcessManager: ObservableObject {
     @Published private(set) var isRunning = false
+    @Published private(set) var state: ServeState = .idle
 
     private var process: Process?
     private let apiClient: ApiClient
@@ -91,6 +101,26 @@ final class ServeProcessManager: ObservableObject {
         self.apiClient = apiClient
         self.fileManager = fileManager
         self.bundle = bundle
+    }
+
+    /// Idempotent, non-throwing entry point that publishes progress through
+    /// `state`. Owned by `AppDelegate` so a menu-bar-only launch (no window,
+    /// or the window closed) still starts the server; the window's Retry
+    /// button and `ContentView.task` call the same thing.
+    func start() async {
+        switch state {
+        case .launching, .ready:
+            return
+        case .idle, .failed:
+            break
+        }
+        state = .launching
+        do {
+            try await ensureRunning()
+            state = .ready
+        } catch {
+            state = .failed(error.localizedDescription)
+        }
     }
 
     /// 1. GET /health. 2. Connection failure → spawn acp-serve. 3. Matching
@@ -121,6 +151,7 @@ final class ServeProcessManager: ObservableObject {
     /// Terminates `acp-serve` only if this manager spawned it. Never touches
     /// an `acp-bridge` process — those are owned by Xcode over stdio.
     func shutdown() {
+        defer { state = .idle }
         guard let process, process.isRunning else {
             process = nil
             isRunning = false

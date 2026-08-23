@@ -7,8 +7,12 @@ enum MainWindow {
     static let id = "main"
 }
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    var serveManager: ServeProcessManager?
+    /// Owned here, not by any scene: with the Dock icon hidden or the window
+    /// closed, `ContentView` may never appear, and acp-serve still has to run
+    /// for the menu bar (and Xcode's own bridge traffic) to work.
+    let serveManager = ServeProcessManager()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // `showDockIcon`'s effect while running (Settings > onChange) doesn't
@@ -16,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // whatever was persisted last time.
         let showDockIcon = UserDefaults.standard.bool(forKey: AppSettingsKeys.showDockIcon)
         NSApp.setActivationPolicy(showDockIcon ? .regular : .accessory)
+        Task { await serveManager.start() }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -23,14 +28,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // "leave server running after Quit". Never touches Xcode-owned
         // acp-bridge processes (those live over stdio, outside our control).
         guard !UserDefaults.standard.bool(forKey: AppSettingsKeys.leaveServerRunningOnQuit) else { return }
-        serveManager?.shutdown()
+        serveManager.shutdown()
     }
 }
 
 @main
 struct ACPBridgeApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var serveManager = ServeProcessManager()
     @StateObject private var routeMenu = RouteMenuModel()
     @StateObject private var appStatus = AppStatusModel()
     @StateObject private var sessionsMenu = SessionsMenuModel()
@@ -45,8 +49,7 @@ struct ACPBridgeApp: App {
 
     var body: some Scene {
         WindowGroup(id: MainWindow.id) {
-            ContentView(serveManager: serveManager, navigator: observatoryNavigator)
-                .onAppear { appDelegate.serveManager = serveManager }
+            ContentView(serveManager: appDelegate.serveManager, navigator: observatoryNavigator)
         }
         .commands {
             CommandMenu("ACP Bridge") {
@@ -58,14 +61,19 @@ struct ACPBridgeApp: App {
 
         MenuBarExtra(isInserted: $showMenuBarExtra) {
             MenuBarView(
-                serveManager: serveManager,
+                serveManager: appDelegate.serveManager,
                 routeMenu: routeMenu,
                 appStatus: appStatus,
                 sessionsMenu: sessionsMenu,
                 navigator: observatoryNavigator
             )
         } label: {
-            MenuBarLabel(serveManager: serveManager, routeMenu: routeMenu, appStatus: appStatus, sessionsMenu: sessionsMenu)
+            MenuBarLabel(
+                serveManager: appDelegate.serveManager,
+                routeMenu: routeMenu,
+                appStatus: appStatus,
+                sessionsMenu: sessionsMenu
+            )
         }
 
         Settings {
