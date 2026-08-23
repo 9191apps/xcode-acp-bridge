@@ -1,5 +1,12 @@
 import SwiftUI
 
+/// Shared identifier for the main `WindowGroup`, so `MenuBarView`'s "Open
+/// Observatory" action can re-open it via `openWindow(id:)` if the user
+/// closed it.
+enum MainWindow {
+    static let id = "main"
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var serveManager: ServeProcessManager?
 
@@ -14,9 +21,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct ACPBridgeApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var serveManager = ServeProcessManager()
+    @StateObject private var routeMenu = RouteMenuModel()
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: MainWindow.id) {
             ContentView(serveManager: serveManager)
                 .onAppear { appDelegate.serveManager = serveManager }
         }
@@ -26,6 +34,12 @@ struct ACPBridgeApp: App {
                     AgentPaths.copyToPasteboard()
                 }
             }
+        }
+
+        MenuBarExtra {
+            MenuBarView(serveManager: serveManager, routeMenu: routeMenu)
+        } label: {
+            MenuBarLabel(serveManager: serveManager, routeMenu: routeMenu)
         }
     }
 }
