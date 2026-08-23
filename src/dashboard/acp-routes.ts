@@ -14,7 +14,18 @@ import { loadSessionModels, writeSessionModel } from "../acp/session-models";
 import type { AcpRouteState } from "../acp/route-state";
 import type { AcpBackend, AcpBridgeConfig, AcpResumeMode } from "../acp/types";
 import type { AcpEventStore } from "../acp/event-store";
+import { resolveAcpPathLayout } from "../acp/paths";
+import {
+  checkAgentAuth,
+  checkQodercliAuth,
+  detectBackendBinary,
+  hasExecutable,
+} from "../setup-check";
+import packageJson from "../../package.json";
 import { EventHub } from "./events";
+
+const PRODUCT = "xcode-acp-bridge";
+const VERSION = packageJson.version;
 
 export type AcpDashboardDeps = {
   config: AcpBridgeConfig;
@@ -186,6 +197,50 @@ export function createAcpDashboardApp(
   const app = new Hono();
 
   store.subscribe((event) => eventHub.publishNamed("acp", event));
+
+  app.get("/health", (c) => {
+    return c.json({ ok: true, product: PRODUCT, version: VERSION });
+  });
+
+  app.get("/api/app/status", (c) => {
+    const route = routeResponse(config);
+    const backends = Object.entries(config.routes).map(([name, backend]) => {
+      const detected = detectBackendBinary(name, backend.command);
+      const command = detected ?? backend.command;
+      const base = path.basename(backend.command);
+      const status: {
+        name: string;
+        command: string;
+        executable: boolean;
+        auth?: { ok: boolean; authenticated: boolean; detail: string };
+      } = {
+        name,
+        command,
+        executable: hasExecutable(command),
+      };
+      if (name === "cursor" || base === "agent" || base === "cursor-agent") {
+        status.auth = checkAgentAuth(command);
+      } else if (name === "qodercli" || base === "qodercli" || base === "qoder") {
+        status.auth = checkQodercliAuth(command);
+      }
+      return status;
+    });
+    const ok = backends.every(
+      (backend) =>
+        backend.executable &&
+        (backend.auth === undefined || (backend.auth.ok && backend.auth.authenticated)),
+    );
+    return c.json({
+      ok,
+      product: PRODUCT,
+      version: VERSION,
+      route: route.route,
+      model: route.model,
+      routes: route.routes,
+      backends,
+      layoutMode: resolveAcpPathLayout().mode,
+    });
+  });
 
   app.get("/api/acp-events", (c) => c.json(store.list()));
 

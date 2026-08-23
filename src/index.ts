@@ -16,7 +16,6 @@ startAcpTail(acpStore, (e) => acpHub.publishNamed("acp", e));
 
 const app = new Hono();
 app.route("/", createAcpDashboardApp(acpStore, acpHub, { config: acpCfg }));
-app.get("/health", (c) => c.json({ ok: true }));
 app.use("/*", serveStatic({ root: "./public" }));
 
 try {
