@@ -9,7 +9,8 @@
     "start": "bun run src/index.ts",
     "test": "bun test",
     "acp-bridge": "bun run src/acp-bridge.ts",
-    "setup": "bun run scripts/setup.ts"
+    "setup": "bun run scripts/setup.ts",
+    "compile:sidecars": "bun run scripts/compile-sidecars.ts"
   },
   "dependencies": {
     "hono": "^4.9.6"
