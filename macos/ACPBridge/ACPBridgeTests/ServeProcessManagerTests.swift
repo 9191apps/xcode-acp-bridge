@@ -255,6 +255,33 @@ final class ObservatoryNavigationTests: XCTestCase {
             coordinator.shouldLoad(ObservatoryNavigation(url: URL(string: "http://127.0.0.1:8787/")!))
         )
     }
+
+    @MainActor
+    func testReloadBumpsTokenWithoutChangingNavigation() {
+        let navigator = ObservatoryNavigationModel()
+        let beforeNav = navigator.request
+        let beforeReload = navigator.reloadToken
+
+        navigator.reload()
+
+        XCTAssertEqual(navigator.request.id, beforeNav.id)
+        XCTAssertEqual(navigator.request.url, beforeNav.url)
+        XCTAssertNotEqual(navigator.reloadToken, beforeReload)
+    }
+
+    func testWebViewReloadsOnlyAfterFirstApplyAndOnTokenChange() {
+        let coordinator = ObservatoryWebView.Coordinator()
+        let first = UUID()
+        let second = UUID()
+
+        // Before any apply, a new token must not trigger reload (initial load
+        // path owns the first paint).
+        XCTAssertFalse(coordinator.shouldReload(first))
+
+        coordinator.appliedReloadToken = first
+        XCTAssertFalse(coordinator.shouldReload(first))
+        XCTAssertTrue(coordinator.shouldReload(second))
+    }
 }
 
 final class AgentPathsTests: XCTestCase {

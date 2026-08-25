@@ -10,12 +10,14 @@ The bridge is **observe-and-forward**: Xcode spawns the bridge as an ACP Agent, 
 
 ## macOS App (menu bar + Observatory)
 
-For day-to-day use without cloning the repo or installing Bun, build the packaged app:
+For day-to-day use without installing Bun separately at runtime, build the packaged app (Bun is still required **at build time** to compile sidecars):
 
 ```bash
 ./scripts/build-app.sh
 # → dist/ACP Bridge.app
 ```
+
+Or open `macos/ACPBridge/ACPBridge.xcodeproj` in Xcode and press ⌘R — a post-build phase embeds `acp-bridge` / `acp-serve` / resume helpers and Observatory assets into the app automatically.
 
 Copy to `/Applications`, launch once (config is seeded under `~/Library/Application Support/ACP Bridge/`), then register the packaged agent in Xcode:
 

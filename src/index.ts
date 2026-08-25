@@ -20,7 +20,21 @@ app.route("/", createAcpDashboardApp(acpStore, acpHub, { config: acpCfg }));
 app.use("/*", serveStatic({ root: publicDir() }));
 
 try {
-  Bun.serve({ hostname: config.host, port: config.port, fetch: app.fetch });
+  Bun.serve({
+    hostname: config.host,
+    port: config.port,
+    // Default Bun idleTimeout is 10s. Quiet SSE streams count as idle, so the
+    // Observatory EventSource was reset every ~10s → RECONNECT flicker. Keep a
+    // modest global timeout for normal requests; disable it per-request for SSE.
+    idleTimeout: 30,
+    fetch(req, server) {
+      const path = new URL(req.url).pathname;
+      if (path === "/acp-events") {
+        server.timeout(req, 0);
+      }
+      return app.fetch(req);
+    },
+  });
   console.log(`Xcode ACP Bridge listening on http://${config.host}:${config.port}`);
 } catch (err) {
   console.error(`Failed to bind ${config.host}:${config.port}. Is the port in use?`);

@@ -27,8 +27,18 @@ targets:
         PRODUCT_NAME: ACPBridge
         INFOPLIST_FILE: ACPBridge/Info.plist
         SWIFT_EMIT_LOC_STRINGS: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # Non-sandboxed by design (no entitlements file): the shell must be
         # able to spawn user-installed backends exactly like the CLI does.
+    # After the Swift binary is linked, compile/copy Bun sidecars + Observatory
+    # assets into the .app so ⌘R / Archive produce a runnable package.
+    postBuildScripts:
+      - name: Embed ACP sidecars
+        basedOnDependencyAnalysis: false
+        script: |
+          set -euo pipefail
+          # SRCROOT is macos/ACPBridge; script lives at repo scripts/
+          bash "${SRCROOT}/../../scripts/embed-sidecars-into-app.sh"
   ACPBridgeTests:
     type: bundle.unit-test
     platform: macOS

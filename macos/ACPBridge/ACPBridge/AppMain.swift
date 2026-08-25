@@ -50,9 +50,25 @@ struct ACPBridgeApp: App {
     var body: some Scene {
         WindowGroup(id: MainWindow.id) {
             ContentView(serveManager: appDelegate.serveManager, navigator: observatoryNavigator)
+                .preferredColorScheme(.dark)
         }
+        // Hide the system gray title bar; traffic lights sit on our dark toolbar.
+        .windowStyle(.hiddenTitleBar)
         .commands {
             CommandMenu("ACP Bridge") {
+                Button("Reload Observatory") {
+                    observatoryNavigator.reload()
+                }
+                .keyboardShortcut("r", modifiers: .command)
+                Divider()
+                Button("Stop Server") {
+                    appDelegate.serveManager.shutdown()
+                }
+                .disabled(!appDelegate.serveManager.isRunning)
+                Button("Start Server") {
+                    Task { await appDelegate.serveManager.start() }
+                }
+                .disabled(appDelegate.serveManager.isRunning)
                 Button("Copy Xcode Agent Paths") {
                     AgentPaths.copyToPasteboard()
                 }

@@ -669,7 +669,9 @@ detailEl.addEventListener("click", (e) => {
 
 const acpEs = new EventSource("/acp-events");
 acpEs.onopen = () => setLive(true);
-acpEs.onerror = () => setLive(false);
+acpEs.onerror = () => {
+  setLive(false);
+};
 acpEs.addEventListener("acp", async () => {
   if (acpSelectedPid == null) return;
   // Keep the open raw pane stable while the user is inspecting a timeline row.

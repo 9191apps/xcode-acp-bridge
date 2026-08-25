@@ -144,12 +144,29 @@ document.addEventListener("click", (e) => {
 
 /* ---- live indicator (page-safe: only touches present nodes) - */
 
+/** EventSource fires `onerror` on every auto-reconnect tick; debounce so the
+ * chip does not flicker RECONNECT on brief CONNECTING blips. */
+let liveOfflineTimer = null;
+
 function setLive(ok) {
   const chip = $("live-chip");
   const txt = $("live-text");
   if (!chip || !txt) return;
-  chip.classList.toggle("offline", !ok);
-  txt.textContent = ok ? "LIVE" : "RECONNECT";
+  if (ok) {
+    if (liveOfflineTimer != null) {
+      clearTimeout(liveOfflineTimer);
+      liveOfflineTimer = null;
+    }
+    chip.classList.toggle("offline", false);
+    txt.textContent = "LIVE";
+    return;
+  }
+  if (liveOfflineTimer != null) return;
+  liveOfflineTimer = setTimeout(() => {
+    liveOfflineTimer = null;
+    chip.classList.toggle("offline", true);
+    txt.textContent = "RECONNECT";
+  }, 1500);
 }
 
 /* ---- small helpers used by both pages ------------------------ */

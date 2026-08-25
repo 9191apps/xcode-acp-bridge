@@ -17,11 +17,13 @@ From the repo root:
 ./scripts/build-app.sh
 ```
 
-This script:
+This script (or **Xcode ⌘R / Archive** on `macos/ACPBridge`) builds a complete app:
 
-1. Runs `bun run compile:sidecars` — compiles `acp-bridge`, `acp-serve`, and resume helpers into `dist/sidecars/`.
-2. Builds the SwiftUI shell with `xcodebuild` (Release).
-3. Assembles `dist/ACP Bridge.app` with sidecars under `Contents/MacOS/`, Observatory static files under `Contents/Resources/public/`, and a bundled default config.
+1. Xcode builds the SwiftUI shell.
+2. Post-build phase **Embed ACP sidecars** compiles (or reuses) `acp-bridge`, `acp-serve`, and resume helpers, then copies them into `Contents/MacOS/` along with Observatory `public/` and the default config under `Contents/Resources/`.
+3. `build-app.sh` copies the resulting `ACPBridge.app` to `dist/ACP Bridge.app` (optional output path supported).
+
+You can also open `macos/ACPBridge/ACPBridge.xcodeproj` and press ⌘R — the same embed phase runs, so DerivedData’s app is runnable without a separate packaging step.
 
 Optional output path:
 

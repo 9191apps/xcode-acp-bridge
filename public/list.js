@@ -301,7 +301,11 @@ $("btn-export").addEventListener("click", () => {
 let acpListRefreshTimer = null;
 const acpEs = new EventSource("/acp-events");
 acpEs.onopen = () => setLive(true);
-acpEs.onerror = () => setLive(false);
+acpEs.onerror = () => {
+  // CONNECTING = browser is auto-reconnecting; CLOSED = give up. Both go
+  // through debounced setLive(false) so brief ticks do not flash RECONNECT.
+  setLive(false);
+};
 acpEs.addEventListener("acp", () => {
   if (acpListRefreshTimer != null) clearTimeout(acpListRefreshTimer);
   acpListRefreshTimer = setTimeout(() => {

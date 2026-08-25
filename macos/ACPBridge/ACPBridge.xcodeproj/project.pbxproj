@@ -24,7 +24,9 @@
 		C3132C1ACACDF30D35DFCE22 /* LoginItemManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50753ABB7ABF8468E9262882 /* LoginItemManagerTests.swift */; };
 		C6C99FF8A606C9578FC0C696 /* ApiClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32B0CD1312C0DFCD6DA3F338 /* ApiClient.swift */; };
 		C963AE8E7FF276982B24C881 /* ServeProcessManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC9EFA2F6C6A2D6A65070416 /* ServeProcessManager.swift */; };
+		D65C07EFDFAE71B9C03D836F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 992B8696887C92FBE36AEC44 /* Assets.xcassets */; };
 		D6E7EFC5883B31D50B261729 /* AppStatusModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96035CE7AB60BE8B2B5F1259 /* AppStatusModel.swift */; };
+		F3B5D994E235A034B7470C6D /* ObservatoryTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F974138F42B8B6594AF8B6C /* ObservatoryTheme.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -45,8 +47,10 @@
 		4535EB8F1B98C3DAC4223F70 /* LoginItemManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemManager.swift; sourceTree = "<group>"; };
 		50753ABB7ABF8468E9262882 /* LoginItemManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemManagerTests.swift; sourceTree = "<group>"; };
 		5833A075F8F4C3A6CC303BF7 /* ACPBridgeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ACPBridgeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		6F974138F42B8B6594AF8B6C /* ObservatoryTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ObservatoryTheme.swift; sourceTree = "<group>"; };
 		96035CE7AB60BE8B2B5F1259 /* AppStatusModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStatusModel.swift; sourceTree = "<group>"; };
 		96C6521092DA679D2926069A /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		992B8696887C92FBE36AEC44 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		9DF2F15AF9660A7328232389 /* RouteMenuModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteMenuModel.swift; sourceTree = "<group>"; };
 		A13B7A32426DBFC1594AE7BF /* ACPBridge.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ACPBridge.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A28288A886881DC80F012C6D /* AppMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMain.swift; sourceTree = "<group>"; };
@@ -91,10 +95,12 @@
 				A28288A886881DC80F012C6D /* AppMain.swift */,
 				96C6521092DA679D2926069A /* AppSettings.swift */,
 				96035CE7AB60BE8B2B5F1259 /* AppStatusModel.swift */,
+				992B8696887C92FBE36AEC44 /* Assets.xcassets */,
 				07B69233162D9947C861DAE1 /* ContentView.swift */,
 				0EF31249679C57315CE236E7 /* Info.plist */,
 				4535EB8F1B98C3DAC4223F70 /* LoginItemManager.swift */,
 				CD31E93CA58CB52435CB32DA /* MenuBarView.swift */,
+				6F974138F42B8B6594AF8B6C /* ObservatoryTheme.swift */,
 				A7B54026BBA02E63F123410C /* ObservatoryWebView.swift */,
 				9DF2F15AF9660A7328232389 /* RouteMenuModel.swift */,
 				DC9EFA2F6C6A2D6A65070416 /* ServeProcessManager.swift */,
@@ -121,6 +127,8 @@
 			buildConfigurationList = 58943AB430EF72D60CD2A149 /* Build configuration list for PBXNativeTarget "ACPBridge" */;
 			buildPhases = (
 				BB765060EA21A65701575C3C /* Sources */,
+				7B8A7AAAEA5238F56699AF24 /* Resources */,
+				0B68280DCCA503BE10AAC608 /* Embed ACP sidecars */,
 			);
 			buildRules = (
 			);
@@ -188,6 +196,39 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		7B8A7AAAEA5238F56699AF24 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D65C07EFDFAE71B9C03D836F /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		0B68280DCCA503BE10AAC608 /* Embed ACP sidecars */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Embed ACP sidecars";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -euo pipefail\n# SRCROOT is macos/ACPBridge; script lives at repo scripts/\nbash \"${SRCROOT}/../../scripts/embed-sidecars-into-app.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		BB765060EA21A65701575C3C /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -200,6 +241,7 @@
 				2569E1667FFA4E3687EC65D5 /* ContentView.swift in Sources */,
 				B53A09CD73F6EE06744D4C6E /* LoginItemManager.swift in Sources */,
 				4E20A72B27A99B0A4C774539 /* MenuBarView.swift in Sources */,
+				F3B5D994E235A034B7470C6D /* ObservatoryTheme.swift in Sources */,
 				60B480EAFA97C6ECC6BEE1E8 /* ObservatoryWebView.swift in Sources */,
 				90408F7FD1901C8F5C49FCD8 /* RouteMenuModel.swift in Sources */,
 				C963AE8E7FF276982B24C881 /* ServeProcessManager.swift in Sources */,

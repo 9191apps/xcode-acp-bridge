@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
+# Build a complete ACP Bridge.app via Xcode (Swift shell + embedded sidecars).
+# Sidecar compile/copy happens in the Xcode "Embed ACP sidecars" build phase.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="${1:-$ROOT/dist/ACP Bridge.app}"
 XCODE_DIR="$ROOT/macos/ACPBridge"
 DERIVED_DATA="$XCODE_DIR/build"
 
-bun run --cwd "$ROOT" compile:sidecars
+export PATH="${HOME}/.bun/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}"
 
-# Build the SwiftUI shell (ACPBridge.xcodeproj is checked in; regenerate with
-# `xcodegen generate` from macos/ACPBridge/project.yml if it's ever deleted).
-# Equivalent manual invocation from macos/ACPBridge/:
-#   xcodebuild -project ACPBridge.xcodeproj -scheme ACPBridge \
-#     -configuration Release -derivedDataPath build build
+# Optional: regenerate project if using XcodeGen and project.yml changed
+if command -v xcodegen >/dev/null 2>&1 && [[ -f "$XCODE_DIR/project.yml" ]]; then
+  (cd "$XCODE_DIR" && xcodegen generate)
+fi
+
 xcodebuild \
   -project "$XCODE_DIR/ACPBridge.xcodeproj" \
   -scheme ACPBridge \
@@ -19,56 +21,20 @@ xcodebuild \
   -derivedDataPath "$DERIVED_DATA" \
   build
 
-SWIFT_BINARY="$DERIVED_DATA/Build/Products/Release/ACPBridge.app/Contents/MacOS/ACPBridge"
-if [ ! -x "$SWIFT_BINARY" ]; then
-  echo "error: expected built binary at $SWIFT_BINARY (xcodebuild did not produce it)" >&2
+BUILT_APP="$DERIVED_DATA/Build/Products/Release/ACPBridge.app"
+if [[ ! -d "$BUILT_APP" ]]; then
+  echo "error: expected built app at $BUILT_APP" >&2
+  exit 1
+fi
+if [[ ! -x "$BUILT_APP/Contents/MacOS/acp-serve" || ! -x "$BUILT_APP/Contents/MacOS/acp-bridge" ]]; then
+  echo "error: built app is missing embedded sidecars (Embed ACP sidecars phase failed?)" >&2
   exit 1
 fi
 
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/public"
-cp "$SWIFT_BINARY" "$APP/Contents/MacOS/ACPBridge"
-chmod +x "$APP/Contents/MacOS/ACPBridge"
-# All sidecars (acp-bridge, acp-serve, and the two resume helpers) live in
-# Contents/MacOS — each is a ~100MB `bun build --compile` binary, so they are
-# deliberately not also copied under Resources/bin. `acpResumeHelperPath`
-# resolves the resume helpers from here via the Resources sibling directory.
-cp "$ROOT/dist/sidecars/"* "$APP/Contents/MacOS/"
-cp -R "$ROOT/public/"* "$APP/Contents/Resources/public/"
-cp "$ROOT/acp-bridge.config.json" "$APP/Contents/Resources/acp-bridge.config.default.json"
-cat > "$APP/Contents/Info.plist" <<'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-	<key>CFBundleExecutable</key>
-	<string>ACPBridge</string>
-	<key>CFBundleIdentifier</key>
-	<string>apps.9191.ACPBridge</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
-	<key>CFBundleName</key>
-	<string>ACP Bridge</string>
-	<key>CFBundlePackageType</key>
-	<string>APPL</string>
-	<key>CFBundleShortVersionString</key>
-	<string>0.1.0</string>
-	<key>CFBundleVersion</key>
-	<string>1</string>
-	<key>LSMinimumSystemVersion</key>
-	<string>14.0</string>
-	<key>NSHighResolutionCapable</key>
-	<true/>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsLocalNetworking</key>
-		<true/>
-	</dict>
-</dict>
-</plist>
-EOF
-# Ad-hoc sign so Gatekeeper/LaunchServices treat this as a normal local app
-# (no Developer ID needed for local smoke testing; notarization is a
-# separate distribution step, not part of M1).
+mkdir -p "$(dirname "$APP")"
+cp -R "$BUILT_APP" "$APP"
+
+# Ad-hoc sign for local smoke testing (Developer ID / notarization is separate).
 codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || true
 echo "Built $APP"

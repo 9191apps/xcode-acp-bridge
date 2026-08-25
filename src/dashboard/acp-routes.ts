@@ -242,10 +242,12 @@ export type BackendStatusEntry = {
  * synchronously (`which`, plus `agent status` / `qodercli status`, each up to
  * an 8s timeout), so an uncached `/api/app/status` can block the event loop for
  * seconds. The menu bar re-reads this endpoint on every open, and backend
- * install/login state changes on a human timescale, so a 30s window keeps the
- * menu honest while collapsing bursts of opens into one probe.
+ * install/login state changes on a human timescale, so a 90s window keeps the
+ * menu honest while collapsing bursts of opens into one probe. Keep this TTL
+ * comfortably above the menu bar poll interval so SSE is not stalled by
+ * synchronous `spawnSync` auth probes on every refresh tick.
  */
-export const APP_STATUS_PROBE_TTL_MS = 30_000;
+export const APP_STATUS_PROBE_TTL_MS = 90_000;
 
 function probeBackends(config: AcpBridgeConfig): BackendStatusEntry[] {
   return Object.entries(config.routes).map(([name, backend]) => {
@@ -321,6 +323,11 @@ export function createAcpDashboardApp(
     return stream(c, async (s) => {
       const body = eventHub.subscribe();
       const reader = body.getReader();
+      // WKWebView / idle proxies drop quiet SSE streams. Comment frames are
+      // ignored by EventSource but keep the socket alive.
+      const heartbeat = setInterval(() => {
+        void s.write(": ping\n\n");
+      }, 5_000);
       try {
         while (true) {
           const { value, done } = await reader.read();
@@ -328,6 +335,7 @@ export function createAcpDashboardApp(
           await s.write(value);
         }
       } finally {
+        clearInterval(heartbeat);
         reader.releaseLock();
       }
     });

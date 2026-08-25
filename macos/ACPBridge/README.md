@@ -37,9 +37,11 @@ xcodebuild -project ACPBridge.xcodeproj -scheme ACPBridge \
 xcodebuild -project ACPBridge.xcodeproj -scheme ACPBridge test
 ```
 
-`scripts/build-app.sh` (repo root) drives this automatically and copies the
-built `ACPBridge` binary, plus the compiled `acp-bridge`/`acp-serve`
-sidecars, into `dist/ACP Bridge.app`.
+A **post-build** phase (`Embed ACP sidecars`) runs `scripts/embed-sidecars-into-app.sh`: it compiles (or reuses) Bun sidecars and copies them plus `public/` and the default config into the built `.app`. After ⌘R, `Contents/MacOS/` should contain `ACPBridge`, `acp-bridge`, `acp-serve`, and the resume helpers.
+
+Requires `bun` on PATH (or `~/.bun/bin`). Set `ACP_FORCE_COMPILE=1` in the scheme environment to force a full sidecar rebuild.
+
+`scripts/build-app.sh` (repo root) runs the same Xcode build and copies the result to `dist/ACP Bridge.app`.
 
 ## Manual smoke test
 

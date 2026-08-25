@@ -31,6 +31,7 @@ struct MenuBarView: View {
         Button("Open Observatory") {
             activateObservatoryWindow()
         }
+        serveLifecycleButtons
         backendStatusSubmenu
         Button("Copy Xcode Agent Paths") {
             AgentPaths.copyToPasteboard()
@@ -46,10 +47,32 @@ struct MenuBarView: View {
 
     @ViewBuilder
     private var statusHeader: some View {
-        if serveManager.isRunning {
+        switch serveManager.state {
+        case .ready:
             Text("ACP Bridge — Running")
-        } else {
+        case .launching:
             Text("ACP Bridge — Starting…")
+        case .failed:
+            Text("ACP Bridge — Error")
+        case .idle:
+            Text("ACP Bridge — Stopped")
+        }
+    }
+
+    @ViewBuilder
+    private var serveLifecycleButtons: some View {
+        switch serveManager.state {
+        case .ready:
+            Button("Stop Server") {
+                serveManager.shutdown()
+            }
+        case .idle, .failed:
+            Button("Start Server") {
+                Task { await serveManager.start() }
+            }
+        case .launching:
+            Button("Start Server") {}
+                .disabled(true)
         }
     }
 
@@ -187,8 +210,8 @@ enum MenuDataRefresher {
     /// Chosen against how the data ages: route/model change only when the user
     /// changes them (in this menu or the Observatory), and sessions change when
     /// Xcode spawns a bridge. `/api/app/status`'s backend probes are cached
-    /// server-side for 30s, so polling faster mostly re-reads that cache.
-    static let interval: Duration = .seconds(20)
+    /// server-side for 90s, so polling faster mostly re-reads that cache.
+    static let interval: Duration = .seconds(30)
 
     static func refreshAll(
         routeMenu: RouteMenuModel,
