@@ -16,5 +16,6 @@ const targets = [
 for (const t of targets) {
   const outfile = path.join(out, t.outfile);
   await $`bun build --compile ${t.entry} --outfile ${outfile}`;
+  await $`bash ${path.join(import.meta.dir, "codesign-sidecar.sh")} ${outfile} ${`apps.9191.ACPBridge.${t.outfile}`}`;
   console.log("compiled", outfile);
 }

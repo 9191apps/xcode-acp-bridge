@@ -43,6 +43,8 @@ else
   entries=(
     "src/acp-bridge.ts:acp-bridge"
     "src/index.ts:acp-serve"
+    "src/dashboard/acp-routes.ts:acp-serve"
+    "src/acp/event-store.ts:acp-serve"
     "src/acp/cursor-acp-resume.ts:cursor-acp-resume"
     "src/acp/qoder-acp-resume.ts:qoder-acp-resume"
   )
@@ -71,6 +73,7 @@ for name in acp-bridge acp-serve cursor-acp-resume qoder-acp-resume; do
   fi
   cp "$src" "${MACOS}/${name}"
   chmod +x "${MACOS}/${name}"
+  bash "$SCRIPT_DIR/codesign-sidecar.sh" "${MACOS}/${name}" "apps.9191.ACPBridge.${name}"
 done
 
 # Observatory static files + default config (overwrite each build so Resources stay in sync)
