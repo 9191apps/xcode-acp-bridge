@@ -26,6 +26,10 @@ struct SessionSummary: Decodable, Identifiable, Equatable {
     /// session id yet still succeeds via the in-process model command.
     var canSetModel: Bool { acpSessionId != nil || status == "live" }
 
+    /// Whether `model` is the one this session is on — used by the Set model
+    /// submenu so the current choice can be shown as an `NSMenuItem` check.
+    func isSelectedModel(_ model: String) -> Bool { self.model == model }
+
     /// Short menu label — route plus the working directory's last path
     /// component, since bridge pids alone aren't meaningful to users.
     var displayTitle: String {
@@ -87,6 +91,39 @@ struct SessionSummary: Decodable, Identifiable, Equatable {
                 debugDescription: "unknown session-list kind: \(kind)"
             )
         }
+    }
+
+    func replacingModel(_ model: String) -> SessionSummary {
+        SessionSummary(
+            id: id,
+            bridgePid: bridgePid,
+            acpSessionId: acpSessionId,
+            status: status,
+            route: route,
+            model: model,
+            cwd: cwd,
+            lastActivityAt: lastActivityAt
+        )
+    }
+
+    private init(
+        id: String,
+        bridgePid: Int,
+        acpSessionId: String?,
+        status: String,
+        route: String?,
+        model: String?,
+        cwd: String?,
+        lastActivityAt: String
+    ) {
+        self.id = id
+        self.bridgePid = bridgePid
+        self.acpSessionId = acpSessionId
+        self.status = status
+        self.route = route
+        self.model = model
+        self.cwd = cwd
+        self.lastActivityAt = lastActivityAt
     }
 }
 
@@ -155,6 +192,9 @@ final class SessionsMenuModel: ObservableObject {
         do {
             _ = try await apiClient.putConversationModel(bridgePid: session.bridgePid, model: model)
             lastError = nil
+            if let index = sessions.firstIndex(where: { $0.id == session.id }) {
+                sessions[index] = sessions[index].replacingModel(model)
+            }
         } catch {
             lastError = error.localizedDescription
             throw error
@@ -173,6 +213,17 @@ final class SessionsMenuModel: ObservableObject {
             lastError = error.localizedDescription
             throw error
         }
+    }
+
+    /// Models shown in a session's Set model submenu: the route's list,
+    /// with the session's current model prepended when the backend list
+    /// doesn't include it (so the checkmark row still exists).
+    func modelChoices(for session: SessionSummary) -> [String] {
+        var options = session.route.flatMap { modelOptions[$0] } ?? []
+        if let current = session.model, !current.isEmpty, !options.contains(current) {
+            options.insert(current, at: 0)
+        }
+        return options
     }
 
     /// Builds the Observatory deep link for `session`'s representative

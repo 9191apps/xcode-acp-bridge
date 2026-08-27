@@ -172,6 +172,99 @@ final class SessionsMenuModelTests: XCTestCase {
         XCTAssertNil(model.pendingBridgePid)
     }
 
+    func testSetModelUpdatesMatchingSessionModelForMenuSelection() async throws {
+        let model = makeModel { request in
+            switch request.url!.path {
+            case "/api/acp-conversation-sessions":
+                return Self.jsonResponse(
+                    request.url!,
+                    """
+                    [{"kind":"session","acpSessionId":"sess-42","spawns":[],\
+                    "startedAt":"2026-08-20T10:00:00.000Z","lastActivityAt":"2026-08-20T10:05:00.000Z",\
+                    "durationMs":0,"status":"live","promptCount":0,"toolCallCount":0,\
+                    "route":"cursor","model":"claude-3.5","cwd":null,"representativeBridgePid":42}]
+                    """
+                )
+            case "/api/acp-models":
+                return Self.jsonResponse(
+                    request.url!,
+                    #"{"route":"cursor","models":["claude-3.5","gpt-5"],"source":"command","current":null}"#
+                )
+            case "/api/acp-conversations/42/model":
+                return Self.jsonResponse(request.url!, #"{"ok":true,"bridgePid":42,"model":"gpt-5"}"#)
+            default:
+                return Self.jsonResponse(request.url!, status: 404, #"{"error":"unexpected"}"#)
+            }
+        }
+
+        await model.refresh()
+        XCTAssertEqual(model.sessions[0].model, "claude-3.5")
+
+        try await model.setModel("gpt-5", for: model.sessions[0])
+
+        XCTAssertEqual(model.sessions[0].model, "gpt-5")
+        XCTAssertTrue(model.sessions[0].isSelectedModel("gpt-5"))
+        XCTAssertFalse(model.sessions[0].isSelectedModel("claude-3.5"))
+    }
+
+    func testModelChoicesPrependsCurrentWhenMissingFromRouteList() async {
+        let model = makeModel { request in
+            if request.url!.path == "/api/acp-conversation-sessions" {
+                return Self.jsonResponse(
+                    request.url!,
+                    """
+                    [{"kind":"session","acpSessionId":"sess-1","spawns":[],\
+                    "startedAt":"2026-08-20T10:00:00.000Z","lastActivityAt":"2026-08-20T10:05:00.000Z",\
+                    "durationMs":0,"status":"live","promptCount":0,"toolCallCount":0,\
+                    "route":"opencode","model":"litellm/deepseek-v4-flash-vision-exp","cwd":null,\
+                    "representativeBridgePid":1}]
+                    """
+                )
+            }
+            return Self.jsonResponse(
+                request.url!,
+                #"{"route":"opencode","models":["opencode/big-pickle"],"source":"command","current":null}"#
+            )
+        }
+
+        await model.refresh()
+        let session = model.sessions[0]
+
+        XCTAssertEqual(
+            model.modelChoices(for: session),
+            ["litellm/deepseek-v4-flash-vision-exp", "opencode/big-pickle"]
+        )
+        XCTAssertTrue(session.isSelectedModel("litellm/deepseek-v4-flash-vision-exp"))
+    }
+
+    func testModelChoicesDoesNotDuplicateCurrentModel() async {
+        let model = makeModel { request in
+            if request.url!.path == "/api/acp-conversation-sessions" {
+                return Self.jsonResponse(
+                    request.url!,
+                    """
+                    [{"kind":"session","acpSessionId":"sess-1","spawns":[],\
+                    "startedAt":"2026-08-20T10:00:00.000Z","lastActivityAt":"2026-08-20T10:05:00.000Z",\
+                    "durationMs":0,"status":"live","promptCount":0,"toolCallCount":0,\
+                    "route":"opencode","model":"litellm/deepseek-v4-pro","cwd":null,\
+                    "representativeBridgePid":1}]
+                    """
+                )
+            }
+            return Self.jsonResponse(
+                request.url!,
+                #"{"route":"opencode","models":["litellm/deepseek-v4-flash","litellm/deepseek-v4-pro"],"source":"command","current":null}"#
+            )
+        }
+
+        await model.refresh()
+
+        XCTAssertEqual(
+            model.modelChoices(for: model.sessions[0]),
+            ["litellm/deepseek-v4-flash", "litellm/deepseek-v4-pro"]
+        )
+    }
+
     func testSetModelFailurePublishesLastErrorAndClearsPending() async {
         let session = try! session(bridgePid: 42, acpSessionId: "sess-42", status: "live", route: "cursor")
         let model = makeModel { request in

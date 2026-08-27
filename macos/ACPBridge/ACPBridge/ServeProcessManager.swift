@@ -96,25 +96,42 @@ final class ServeProcessManager: ObservableObject {
     private let apiClient: ApiClient
     private let fileManager: FileManager
     private let bundle: Bundle
+    private let healthTimeout: TimeInterval
 
-    init(apiClient: ApiClient = ApiClient(), fileManager: FileManager = .default, bundle: Bundle = .main) {
+    init(
+        apiClient: ApiClient = ApiClient(),
+        fileManager: FileManager = .default,
+        bundle: Bundle = .main,
+        healthTimeout: TimeInterval = 8
+    ) {
         self.apiClient = apiClient
         self.fileManager = fileManager
         self.bundle = bundle
+        self.healthTimeout = healthTimeout
     }
 
     /// Idempotent, non-throwing entry point that publishes progress through
     /// `state`. Owned by `AppDelegate` so a menu-bar-only launch (no window,
     /// or the window closed) still starts the server; the window's Retry
     /// button and `ContentView.task` call the same thing.
+    ///
+    /// If we already believe the server is `.ready` but `/health` no longer
+    /// answers (serve crashed, was killed, or died with a suspended debug
+    /// session), clear the stale state and spawn again — otherwise the
+    /// Observatory WebView stays blank forever.
     func start() async {
         switch state {
-        case .launching, .ready:
+        case .launching:
             return
+        case .ready:
+            if await isOurServeHealthy() {
+                return
+            }
+            clearManagedProcess()
+            state = .launching
         case .idle, .failed:
-            break
+            state = .launching
         }
-        state = .launching
         do {
             try await ensureRunning()
             state = .ready
@@ -153,14 +170,14 @@ final class ServeProcessManager: ObservableObject {
     func shutdown() {
         defer { state = .idle }
         guard let process, process.isRunning else {
-            process = nil
-            isRunning = false
+            clearManagedProcess()
             return
         }
+        // Clear handler first so our unexpected-exit path doesn't fire on Quit.
+        process.terminationHandler = nil
         process.terminate()
         process.waitUntilExit()
-        self.process = nil
-        isRunning = false
+        clearManagedProcess()
     }
 
     private func spawnServe() throws {
@@ -193,12 +210,38 @@ final class ServeProcessManager: ObservableObject {
         // Merge onto the inherited environment (PATH, HOME, etc.) rather than
         // replacing it — acp-serve still needs a usable PATH/HOME to run.
         process.environment = ProcessInfo.processInfo.environment.merging(overrides) { _, override in override }
+        process.terminationHandler = { [weak self] terminated in
+            Task { @MainActor in
+                self?.handleServeExited(terminated)
+            }
+        }
         do {
             try process.run()
         } catch {
             throw ServeError.launchFailed(error.localizedDescription)
         }
         self.process = process
+    }
+
+    private func handleServeExited(_ terminated: Process) {
+        guard process === terminated else { return }
+        clearManagedProcess()
+        switch state {
+        case .ready, .launching:
+            state = .failed("acp-serve exited unexpectedly (status \(terminated.terminationStatus)).")
+        case .idle, .failed:
+            break
+        }
+    }
+
+    private func clearManagedProcess() {
+        process = nil
+        isRunning = false
+    }
+
+    private func isOurServeHealthy() async -> Bool {
+        guard let health = try? await apiClient.health() else { return false }
+        return health.product == ProductInfo.identifier
     }
 
     private func ensureApplicationSupportHome() throws -> URL {
@@ -215,10 +258,10 @@ final class ServeProcessManager: ObservableObject {
         return home
     }
 
-    private func waitForHealth(timeout: TimeInterval = 8, pollInterval: TimeInterval = 0.2) async throws {
-        let deadline = Date().addingTimeInterval(timeout)
+    private func waitForHealth(pollInterval: TimeInterval = 0.2) async throws {
+        let deadline = Date().addingTimeInterval(healthTimeout)
         while Date() < deadline {
-            if let health = try? await apiClient.health(), health.product == ProductInfo.identifier {
+            if await isOurServeHealthy() {
                 return
             }
             try await Task.sleep(nanoseconds: UInt64(pollInterval * 1_000_000_000))

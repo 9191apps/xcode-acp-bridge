@@ -179,15 +179,21 @@ struct MenuBarView: View {
 
     @ViewBuilder
     private func setModelOptions(_ session: SessionSummary) -> some View {
-        let options = session.route.flatMap { sessionsMenu.modelOptions[$0] } ?? []
+        let options = sessionsMenu.modelChoices(for: session)
         if options.isEmpty {
             Text("No models available")
         } else {
             ForEach(options, id: \.self) { model in
-                Button {
-                    Task { try? await sessionsMenu.setModel(model, for: session) }
-                } label: {
-                    routeLabel(model, isSelected: model == session.model)
+                // Toggle maps to NSMenuItem.state; Button+Label checkmarks
+                // are dropped in nested MenuBarExtra menus.
+                Toggle(isOn: Binding(
+                    get: { session.isSelectedModel(model) },
+                    set: { enabled in
+                        guard enabled, !session.isSelectedModel(model) else { return }
+                        Task { try? await sessionsMenu.setModel(model, for: session) }
+                    }
+                )) {
+                    Text(model)
                 }
             }
         }

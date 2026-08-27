@@ -162,7 +162,10 @@ final class ServeProcessManagerStateTests: XCTestCase {
     }
 
     private func makeManager() -> ServeProcessManager {
-        ServeProcessManager(apiClient: ApiClient(session: MockURLProtocol.makeSession()))
+        ServeProcessManager(
+            apiClient: ApiClient(session: MockURLProtocol.makeSession()),
+            healthTimeout: 0.4
+        )
     }
 
     func testStartPublishesReadyWhenAnExistingServerIsOurs() async {
@@ -195,7 +198,9 @@ final class ServeProcessManagerStateTests: XCTestCase {
         XCTAssertFalse(manager.isRunning)
     }
 
-    func testStartIsIdempotentOnceReady() async {
+    func testStartReprobesHealthWhenAlreadyReady() async {
+        // Ready is no longer a hard no-op: serve may have died under us, so
+        // each start() while ready re-checks /health (and stays ready if ok).
         var healthRequests = 0
         MockURLProtocol.handler = { request in
             healthRequests += 1
@@ -207,8 +212,38 @@ final class ServeProcessManagerStateTests: XCTestCase {
         await manager.start()
         await manager.start()
 
-        XCTAssertEqual(healthRequests, 1, "a second start() while ready should not re-probe")
+        XCTAssertEqual(healthRequests, 2, "a second start() while ready should re-probe health")
         XCTAssertEqual(manager.state, .ready)
+    }
+
+    func testStartLeavesReadyWhenServeDiesUnderUs() async {
+        // First probe succeeds → ready. Second probe is connection-refused →
+        // we clear stale ready and attempt spawn; without a real bundled
+        // binary that fails, which is enough to prove we didn't stay stuck
+        // on .ready with a dead server.
+        var healthRequests = 0
+        MockURLProtocol.handler = { request in
+            healthRequests += 1
+            if healthRequests == 1 {
+                let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                return (response, #"{"ok":true,"product":"xcode-acp-bridge","version":"0.1.0"}"#.data(using: .utf8)!)
+            }
+            throw NSError(domain: NSURLErrorDomain, code: NSURLErrorCannotConnectToHost)
+        }
+        let manager = makeManager()
+
+        await manager.start()
+        XCTAssertEqual(manager.state, .ready)
+
+        await manager.start()
+
+        XCTAssertNotEqual(manager.state, .ready, "must not stay ready when /health no longer answers")
+        if case .failed = manager.state {
+            // expected — spawn needs the bundled acp-serve binary
+        } else {
+            XCTFail("expected .failed after stale ready, got \(manager.state)")
+        }
+        XCTAssertFalse(manager.isRunning)
     }
 
     func testShutdownReturnsToIdleSoStartCanRunAgain() async {

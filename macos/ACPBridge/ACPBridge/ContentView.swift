@@ -57,6 +57,7 @@ final class ObservatoryNavigationModel: ObservableObject {
 struct ContentView: View {
     @ObservedObject var serveManager: ServeProcessManager
     @ObservedObject var navigator: ObservatoryNavigationModel
+    @Environment(\.scenePhase) private var scenePhase
     @State private var copyConfirmation = false
 
     var body: some View {
@@ -77,6 +78,12 @@ struct ContentView: View {
         // The delegate already kicked this off at launch; calling again is a
         // no-op unless a previous attempt failed or the server was shut down.
         .task { await serveManager.start() }
+        // Re-probe when the window becomes active — covers "state still ready
+        // but acp-serve died" without requiring a manual Stop/Start.
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await serveManager.start() }
+        }
     }
 
     private var toolbar: some View {
