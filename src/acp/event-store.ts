@@ -618,6 +618,32 @@ export class AcpEventStore {
     }
   }
 
+  /**
+   * Delete one conversation (all shard files for `bridgePid`) from disk and
+   * memory. Returns false when the pid is unknown. Does not stop a live
+   * bridge process — if it keeps appending, the record can reappear.
+   */
+  async deleteByPid(pid: number): Promise<boolean> {
+    const files = this.filesByPid.get(pid);
+    const known = (files != null && files.size > 0) || this.summaryState.has(pid);
+    if (!known) return false;
+    const names = [...(files ?? [])];
+    for (const name of names) {
+      try {
+        await fs.unlink(path.join(this.dir, name));
+      } catch {
+        // already gone
+      }
+    }
+    if (this.pendingChunk?.bridgePid === pid) this.pendingChunk = null;
+    this.ring = this.ring.filter((event) => event.bridgePid !== pid);
+    if (names.length > 0) this.pruneIndexes(names);
+    this.filesByPid.delete(pid);
+    this.activeFileByPid.delete(pid);
+    this.summaryState.delete(pid);
+    return true;
+  }
+
   /** Delete conversation files idle longer than maxDays. */
   async enforceRetention(now = Date.now()): Promise<string[]> {
     const cutoff = now - this.maxDays * 86_400_000;

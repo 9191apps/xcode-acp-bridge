@@ -39,6 +39,9 @@
           <select id="acp-next-route"></select>
           <label class="toolbar-label" for="acp-next-model">Model</label>
           <select id="acp-next-model"></select>
+          <button id="acp-models-refresh" class="btn ghost sm" type="button" title="Re-fetch the model list from the backend (bypasses cache)">
+            <span class="btn-icon" aria-hidden="true">↻</span>Refresh
+          </button>
           <span id="acp-model-status" class="hint"></span>
           <span class="hint hint-wide">Applies to the next Xcode spawn. Open a conversation to switch its model — live applies now, ended applies on next resume.</span>
         </div>
@@ -60,6 +63,7 @@
                 <th class="num">Tools</th>
                 <th>Duration</th>
                 <th>Status</th>
+                <th class="col-actions"></th>
               </tr>
             </thead>
             <tbody id="acp-conversation-list"></tbody>

@@ -1,3 +1,4 @@
+import { countAcpImagesFromRaw } from "./content-blocks";
 import { extractRpcMeta } from "./parse";
 import type { AcpEvent } from "./types";
 
@@ -42,6 +43,7 @@ export type TimelineItem =
       raw: string;
       durationMs: number | null;
       gapMs: number | null;
+      imageCount: number;
     }
   | {
       type: "tool_call";
@@ -54,6 +56,7 @@ export type TimelineItem =
       raw: string;
       durationMs: number | null;
       gapMs: number | null;
+      imageCount: number;
     }
   | {
       type: "chunks";
@@ -291,6 +294,7 @@ function buildTimeline(events: AcpEvent[]): TimelineItem[] {
         raw: event.raw,
         durationMs: null,
         gapMs: null,
+        imageCount: countAcpImagesFromRaw(event.raw),
       });
       continue;
     }
@@ -301,6 +305,7 @@ function buildTimeline(events: AcpEvent[]): TimelineItem[] {
         last.updateCount += 1;
         last.raw = event.raw;
         last.lastTs = event.ts;
+        last.imageCount = countAcpImagesFromRaw(event.raw);
         if (event.dir) last.dir = event.dir;
       } else {
         timeline.push({
@@ -314,6 +319,7 @@ function buildTimeline(events: AcpEvent[]): TimelineItem[] {
           raw: event.raw,
           durationMs: null,
           gapMs: null,
+          imageCount: countAcpImagesFromRaw(event.raw),
         });
       }
       continue;
@@ -360,6 +366,7 @@ function buildTimeline(events: AcpEvent[]): TimelineItem[] {
       raw: event.raw,
       durationMs: null,
       gapMs: null,
+      imageCount: countAcpImagesFromRaw(event.raw),
     });
   }
 

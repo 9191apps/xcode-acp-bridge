@@ -417,4 +417,23 @@ describe("AcpEventStore", () => {
     expect(stats.files).toBe(0);
     expect(stats.skipped).toHaveLength(1);
   });
+
+  test("deleteByPid removes files, ring events, and summary of one conversation", async () => {
+    const store = new AcpEventStore(eventsPath);
+    await store.append(
+      ev({ id: "a1", bridgePid: 11, kind: "process_start", ts: "2026-08-16T10:00:00.000Z" }),
+    );
+    await store.append(ev({ id: "a2", bridgePid: 11, ts: "2026-08-16T10:00:01.000Z" }));
+    await store.append(
+      ev({ id: "b1", bridgePid: 22, kind: "process_start", ts: "2026-08-16T10:01:00.000Z" }),
+    );
+    expect(await store.deleteByPid(11)).toBe(true);
+    expect(store.list().map((e) => e.id)).toEqual(["b1"]);
+    expect(store.summaries().map((s) => s.bridgePid)).toEqual([22]);
+    expect(store.detail(11)).toBeNull();
+    const files = await shardFiles();
+    expect(files.some((n) => n.startsWith("11-"))).toBe(false);
+    expect(files.some((n) => n.startsWith("22-"))).toBe(true);
+    expect(await store.deleteByPid(11)).toBe(false);
+  });
 });

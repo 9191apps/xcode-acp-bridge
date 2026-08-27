@@ -405,6 +405,19 @@ export function createAcpDashboardApp(
     return c.json(withLiveStatus(overlayStoredModel(detail, loadSessionModels(config.eventsPath))));
   });
 
+  app.delete("/api/acp-conversations/:bridgePid", async (c) => {
+    const pid = Number(c.req.param("bridgePid"));
+    if (Number.isNaN(pid)) {
+      return c.json({ error: "not found" }, 404);
+    }
+    const removed = await store.deleteByPid(pid);
+    if (!removed) {
+      return c.json({ error: "not found" }, 404);
+    }
+    eventHub.publishNamed("acp", { id: `deleted-${pid}`, kind: "deleted", bridgePid: pid });
+    return c.json({ ok: true, bridgePid: pid });
+  });
+
   app.put("/api/acp-conversations/:bridgePid/model", async (c) => {
     const pid = Number(c.req.param("bridgePid"));
     if (Number.isNaN(pid)) {

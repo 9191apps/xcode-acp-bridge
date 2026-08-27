@@ -169,12 +169,89 @@ function setLive(ok) {
   }, 1500);
 }
 
-/* ---- small helpers used by both pages ------------------------ */
+/* ---- ACP image content blocks (prompt / tool results) -------- */
+
+const ACP_SAFE_IMAGE_MIME = /^image\/(png|jpe?g|gif|webp|bmp)$/i;
+const ACP_BASE64_BODY = /^[A-Za-z0-9+/=\s]+$/;
+
+function extractAcpImages(value) {
+  const out = [];
+  const walk = (node) => {
+    if (node == null) return;
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item);
+      return;
+    }
+    if (typeof node !== "object") return;
+    if (node.type === "image") {
+      const data = typeof node.data === "string" && node.data.length > 0 ? node.data : null;
+      const url =
+        typeof node.url === "string" && node.url.length > 0
+          ? node.url
+          : typeof node.uri === "string" && node.uri.length > 0
+            ? node.uri
+            : null;
+      const mimeType =
+        typeof node.mimeType === "string" && node.mimeType.length > 0
+          ? node.mimeType
+          : typeof node.mime_type === "string" && node.mime_type.length > 0
+            ? node.mime_type
+            : "application/octet-stream";
+      out.push({ mimeType, data, url });
+      return;
+    }
+    for (const child of Object.values(node)) walk(child);
+  };
+  walk(value);
+  return out;
+}
+
+function extractAcpImagesFromRaw(raw) {
+  if (typeof raw !== "string" || raw.length === 0) return [];
+  try {
+    return extractAcpImages(JSON.parse(raw));
+  } catch {
+    return [];
+  }
+}
+
+function acpImageDataUrl(image) {
+  if (!image || !ACP_SAFE_IMAGE_MIME.test(image.mimeType)) return null;
+  if (typeof image.data !== "string" || image.data.length === 0) return null;
+  if (!ACP_BASE64_BODY.test(image.data)) return null;
+  return `data:${image.mimeType};base64,${image.data.replace(/\s+/g, "")}`;
+}
+
+function acpImageCaption(image) {
+  if (image?.url) {
+    try {
+      const path = String(image.url).split(/[?#]/, 1)[0];
+      const leaf = path.split("/").filter(Boolean).at(-1);
+      if (leaf) return decodeURIComponent(leaf);
+    } catch {
+      // keep mime fallback
+    }
+  }
+  return image?.mimeType || "image";
+}
+
+function redactAcpImageData(value) {
+  if (Array.isArray(value)) return value.map(redactAcpImageData);
+  if (value === null || typeof value !== "object") return value;
+  if (value.type === "image" && typeof value.data === "string") {
+    return { ...value, data: `<base64 ${value.data.length} chars>` };
+  }
+  const next = {};
+  for (const [key, child] of Object.entries(value)) {
+    next[key] = redactAcpImageData(child);
+  }
+  return next;
+}
 
 function formatEventPayload(raw) {
   if (raw == null || raw.length === 0) return raw;
   try {
-    return JSON.stringify(JSON.parse(raw), null, 2);
+    return JSON.stringify(redactAcpImageData(JSON.parse(raw)), null, 2);
   } catch {
     return raw;
   }

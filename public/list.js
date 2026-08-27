@@ -2,6 +2,7 @@
 const acpConversationListEl = $("acp-conversation-list");
 const acpNextRouteEl = $("acp-next-route");
 const acpNextModelEl = $("acp-next-model");
+const acpModelsRefreshEl = $("acp-models-refresh");
 const acpModelStatusEl = $("acp-model-status");
 const acpEmpty = $("acp-empty");
 const tableWrap = $("acp-table-wrap");
@@ -88,6 +89,13 @@ function totalSpawnCount(groups) {
   return groups.reduce((n, g) => n + groupSpawnCount(g), 0);
 }
 
+function deleteCellHtml(pids, { live = false, all = false } = {}) {
+  const title = all ? "Delete all spawns in this session" : "Delete Observatory record";
+  return `<td class="col-actions">
+    <button type="button" class="btn ghost sm row-delete" data-delete-pids="${pids.join(",")}" data-live="${live ? "1" : "0"}" title="${escapeHtml(title)}">Delete</button>
+  </td>`;
+}
+
 function spawnCellsHtml(c) {
   return `
     <td class="col-time" title="${escapeHtml(fmtFull(c.startedAt))}">${escapeHtml(fmtClock(c.startedAt))}</td>
@@ -97,7 +105,8 @@ function spawnCellsHtml(c) {
     <td class="num">${escapeHtml(c.promptCount)}</td>
     <td class="num">${escapeHtml(c.toolCallCount ?? 0)}</td>
     <td class="col-ms">${escapeHtml(fmtDuration(c.durationMs))}</td>
-    <td>${conversationStatusPill(c.status)}</td>`;
+    <td>${conversationStatusPill(c.status)}</td>
+    ${deleteCellHtml([c.bridgePid], { live: c.status === "live" })}`;
 }
 
 function sessionParentRowHtml(g, expanded, showExpand) {
@@ -120,6 +129,10 @@ function sessionParentRowHtml(g, expanded, showExpand) {
     <td class="num">${escapeHtml(g.toolCallCount ?? 0)}</td>
     <td class="col-ms">${escapeHtml(fmtDuration(g.durationMs))}</td>
     <td>${conversationStatusPill(g.status)}</td>
+    ${deleteCellHtml(
+      g.spawns.map((s) => s.bridgePid),
+      { live: g.status === "live", all: g.spawns.length > 1 },
+    )}
   </tr>`;
 }
 
@@ -195,10 +208,11 @@ function renderAcpConversations() {
 
 /* ---- route / model selects ----------------------------------- */
 
-async function loadAcpModels() {
+async function loadAcpModels({ refresh = false } = {}) {
   const route = acpNextRouteEl.value;
   if (!route) return;
-  const data = await fetch(`/api/acp-models?route=${encodeURIComponent(route)}`).then((r) => r.json());
+  const url = `/api/acp-models?route=${encodeURIComponent(route)}${refresh ? "&refresh=1" : ""}`;
+  const data = await fetch(url).then((r) => r.json());
   const models = data.models ?? [];
   acpNextModelEl.innerHTML = [
     `<option value="">(backend default)</option>`,
@@ -240,6 +254,40 @@ async function loadAcpConversations() {
 /* ---- event wiring ------------------------------------------- */
 
 acpConversationListEl.addEventListener("click", (e) => {
+  const del = e.target.closest("[data-delete-pids]");
+  if (del && acpConversationListEl.contains(del)) {
+    e.preventDefault();
+    e.stopPropagation();
+    const pids = String(del.getAttribute("data-delete-pids") ?? "")
+      .split(",")
+      .map(Number)
+      .filter((n) => Number.isFinite(n) && n > 0);
+    if (pids.length === 0) return;
+    const live = del.getAttribute("data-live") === "1";
+    const msg =
+      pids.length > 1
+        ? `Delete ${pids.length} Observatory records for this session?`
+        : "Delete this Observatory record?";
+    const extra = live
+      ? "\n\nThis conversation is still live; new events may recreate it. Xcode is not stopped."
+      : "";
+    if (!confirm(msg + extra)) return;
+    del.disabled = true;
+    void (async () => {
+      try {
+        for (const pid of pids) {
+          const res = await fetch(`/api/acp-conversations/${pid}`, { method: "DELETE" });
+          if (!res.ok && res.status !== 404) {
+            alert(`Delete failed: HTTP ${res.status}`);
+            break;
+          }
+        }
+      } finally {
+        await loadAcpConversations();
+      }
+    })();
+    return;
+  }
   const toggle = e.target.closest("[data-session-toggle]");
   if (toggle && acpConversationListEl.contains(toggle)) {
     e.preventDefault();
@@ -272,6 +320,20 @@ acpNextRouteEl.addEventListener("change", async () => {
     body: JSON.stringify({ route: acpNextRouteEl.value }),
   });
   await loadAcpRoute();
+});
+
+acpModelsRefreshEl.addEventListener("click", async () => {
+  acpModelsRefreshEl.disabled = true;
+  const prev = acpModelStatusEl.textContent;
+  acpModelStatusEl.textContent = "refreshing…";
+  try {
+    await loadAcpModels({ refresh: true });
+  } catch (err) {
+    acpModelStatusEl.textContent = err instanceof Error ? err.message : String(err);
+    if (!acpModelStatusEl.textContent) acpModelStatusEl.textContent = prev;
+  } finally {
+    acpModelsRefreshEl.disabled = false;
+  }
 });
 
 acpNextModelEl.addEventListener("change", async () => {

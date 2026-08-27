@@ -163,6 +163,31 @@ describe("acp dashboard api", () => {
     }
   });
 
+  test("DELETE /api/acp-conversations/:pid removes one conversation", async () => {
+    const store = new AcpEventStore(eventsPath);
+    await store.append(
+      ev({ id: "keep", bridgePid: 22, kind: "process_start", ts: "2026-08-16T10:01:00.000Z" }),
+    );
+    await store.append(
+      ev({ id: "gone", bridgePid: 11, kind: "process_start", ts: "2026-08-16T10:00:00.000Z" }),
+    );
+    const app = acpApp(store);
+    const res = await app.request("http://127.0.0.1/api/acp-conversations/11", { method: "DELETE" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, bridgePid: 11 });
+    const list = await (await app.request("http://127.0.0.1/api/acp-conversations")).json();
+    expect(list.map((row: { bridgePid: number }) => row.bridgePid)).toEqual([22]);
+    const missing = await app.request("http://127.0.0.1/api/acp-conversations/11");
+    expect(missing.status).toBe(404);
+  });
+
+  test("DELETE /api/acp-conversations/:pid 404s when missing", async () => {
+    const store = new AcpEventStore(eventsPath);
+    const app = acpApp(store);
+    const res = await app.request("http://127.0.0.1/api/acp-conversations/999", { method: "DELETE" });
+    expect(res.status).toBe(404);
+  });
+
   test("POST /api/acp-events/clear empties list and deletes shard dir", async () => {
     const store = new AcpEventStore(eventsPath);
     await store.append(ev({ id: "clear-me" }));

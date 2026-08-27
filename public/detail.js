@@ -23,6 +23,8 @@ let acpDetailDragging = false;
 /* ---- placeholder / not-found states -------------------------- */
 
 function renderAcpPlaceholder() {
+  const delBtn = $("btn-delete-conversation");
+  if (delBtn) delBtn.hidden = true;
   detailEl.innerHTML = `
     <div class="empty-state">
       <div class="empty-glyph" aria-hidden="true">⌁</div>
@@ -33,6 +35,8 @@ function renderAcpPlaceholder() {
 }
 
 function renderAcpNotFound() {
+  const delBtn = $("btn-delete-conversation");
+  if (delBtn) delBtn.hidden = true;
   detailEl.innerHTML = `
     <div class="empty-state">
       <div class="empty-glyph" aria-hidden="true">✕</div>
@@ -81,6 +85,12 @@ function timelineBodyLabel(item) {
 
 /* One-line content preview under the label, so long timelines
    can be scanned without clicking every row. */
+function timelineImageCount(item) {
+  if (typeof item?.imageCount === "number") return item.imageCount;
+  if (typeof item?.raw === "string") return extractAcpImagesFromRaw(item.raw).length;
+  return 0;
+}
+
 function timelinePreview(item) {
   const trunc = (s) => {
     const flat = String(s).replace(/\s+/g, " ").trim();
@@ -124,11 +134,19 @@ function timelinePreview(item) {
       if (typeof params === "object") {
         const prompt = params.prompt;
         if (Array.isArray(prompt)) {
+          let first = "";
+          let last = "";
+          let hasImage = false;
           for (const part of prompt) {
-            if (part && typeof part.text === "string" && part.text.trim()) {
-              return trunc(part.text);
+            if (!part || typeof part !== "object") continue;
+            if (part.type === "image") hasImage = true;
+            if (typeof part.text === "string" && part.text.trim()) {
+              if (!first) first = part.text;
+              last = part.text;
             }
           }
+          const text = hasImage ? last : first;
+          if (text) return trunc(text);
         }
         return trunc(JSON.stringify(params));
       }
@@ -144,6 +162,7 @@ function timelineItemSearchText(item) {
   return [
     timelineBodyLabel(item),
     timelinePreview(item),
+    timelineImageCount(item) > 0 ? "[image]" : "",
     item.type ?? "",
     item.method ?? "",
     item.name ?? "",
@@ -168,13 +187,20 @@ function timelineItemHtml(item, i, selected, match) {
   const previewHtml = preview
     ? `<span class="tl-preview">${escapeHtml(preview)}</span>`
     : "";
+  const imageTag =
+    timelineImageCount(item) > 0
+      ? `<span class="tl-image-tag">[image]</span>`
+      : "";
   const time = item.ts ?? item.firstTs ?? item.lastTs ?? "";
   return `<li data-index="${i}" data-event-id="${escapeHtml(eventId ?? "")}" class="${selectedClass} ${filteredClass}">
     <span class="tl-dot dir-${source.key}" aria-hidden="true"></span>
     <span class="tl-time">${escapeHtml(time ? fmtClock(time) : "")}</span>
     <span class="dir-tag dir-${source.key}">${escapeHtml(source.label)}</span>
     <span class="tl-main">
-      <span class="tl-label">${escapeHtml(timelineBodyLabel(item))}</span>
+      <span class="tl-label-row">
+        <span class="tl-label">${escapeHtml(timelineBodyLabel(item))}</span>
+        ${imageTag}
+      </span>
       ${previewHtml}
     </span>
     ${timingHtml}
@@ -198,6 +224,77 @@ function showAcpSelectedTiming(item) {
   el.textContent = parts.length > 0 ? parts.join(" · ") : "";
 }
 
+function acpImageByteLabel(data) {
+  if (typeof data !== "string" || data.length === 0) return "";
+  const bytes = Math.floor((data.replace(/\s+/g, "").length * 3) / 4);
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function renderAcpImageThumb(image) {
+  const src = acpImageDataUrl(image);
+  const caption = acpImageCaption(image);
+  const size = acpImageByteLabel(image.data);
+  const capText = size ? `${caption} · ${size}` : caption;
+
+  if (src) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "acp-image-thumb";
+    btn.setAttribute("role", "listitem");
+    btn.title = `Open ${capText}`;
+    const frame = document.createElement("span");
+    frame.className = "acp-image-frame";
+    const img = document.createElement("img");
+    img.src = src;
+    img.alt = caption;
+    img.loading = "lazy";
+    frame.append(img);
+    const cap = document.createElement("span");
+    cap.className = "acp-image-cap";
+    cap.textContent = capText;
+    btn.append(frame, cap);
+    btn.addEventListener("click", () => openAcpImageLightbox(src, capText));
+    return btn;
+  }
+
+  const missing = document.createElement("div");
+  missing.className = "acp-image-thumb is-missing";
+  missing.setAttribute("role", "listitem");
+  const frame = document.createElement("span");
+  frame.className = "acp-image-frame acp-image-missing";
+  frame.textContent = "no pixels";
+  const cap = document.createElement("span");
+  cap.className = "acp-image-cap";
+  cap.textContent = capText;
+  missing.append(frame, cap);
+  return missing;
+}
+
+function renderAcpImageStrip(images) {
+  const strip = document.createElement("div");
+  strip.className = "acp-image-strip";
+  const meta = document.createElement("p");
+  meta.className = "acp-image-strip-meta";
+  meta.textContent = images.length === 1 ? "1 image" : `${images.length} images`;
+  const row = document.createElement("div");
+  row.className = "acp-image-strip-row";
+  row.setAttribute("role", "list");
+  for (const image of images) row.append(renderAcpImageThumb(image));
+  strip.append(meta, row);
+  return strip;
+}
+
+function mountAcpEventPayload(rawSlot, raw, restNodes) {
+  const wrap = document.createElement("div");
+  wrap.className = "acp-event-payload";
+  const images = extractAcpImagesFromRaw(raw);
+  if (images.length > 0) wrap.append(renderAcpImageStrip(images));
+  for (const node of restNodes) wrap.append(node);
+  rawSlot.replaceChildren(wrap);
+}
+
 function showAcpTimelineRaw(raw, note) {
   const rawSlot = $("acp-timeline-raw");
   if (!rawSlot) return;
@@ -216,7 +313,7 @@ function showAcpTimelineRaw(raw, note) {
   const pre = document.createElement("pre");
   pre.className = "json";
   pre.innerHTML = highlightJson(formatEventPayload(raw));
-  rawSlot.replaceChildren(pre);
+  mountAcpEventPayload(rawSlot, raw, [pre]);
 }
 
 function showAcpTimelineSelection(item) {
@@ -246,10 +343,51 @@ function showAcpTimelineSelection(item) {
       details.append(summary, rawPre);
       wrap.append(details);
     }
-    rawSlot.replaceChildren(wrap);
+    const raw = typeof item.raw === "string" ? item.raw : "";
+    mountAcpEventPayload(rawSlot, raw, [wrap]);
     return;
   }
   showAcpTimelineRaw(typeof item?.raw === "string" ? item.raw : acpSelectedRaw ?? "");
+}
+
+function ensureAcpImageLightbox() {
+  let root = $("acp-image-lightbox");
+  if (root) return root;
+  root = document.createElement("div");
+  root.id = "acp-image-lightbox";
+  root.hidden = true;
+  root.innerHTML = `
+    <button type="button" class="acp-lightbox-scrim" aria-label="Close image"></button>
+    <figure class="acp-lightbox-frame">
+      <img alt="">
+      <figcaption></figcaption>
+      <button type="button" class="acp-lightbox-close">close</button>
+    </figure>
+  `;
+  document.body.append(root);
+  root.querySelector(".acp-lightbox-scrim").addEventListener("click", closeAcpImageLightbox);
+  root.querySelector(".acp-lightbox-close").addEventListener("click", closeAcpImageLightbox);
+  return root;
+}
+
+function openAcpImageLightbox(src, caption) {
+  const root = ensureAcpImageLightbox();
+  const img = root.querySelector("img");
+  const cap = root.querySelector("figcaption");
+  img.src = src;
+  img.alt = caption;
+  cap.textContent = caption;
+  root.hidden = false;
+  document.body.classList.add("acp-lightbox-open");
+}
+
+function closeAcpImageLightbox() {
+  const root = $("acp-image-lightbox");
+  if (!root || root.hidden) return;
+  root.hidden = true;
+  const img = root.querySelector("img");
+  if (img) img.removeAttribute("src");
+  document.body.classList.remove("acp-lightbox-open");
 }
 
 /* ---- resizable raw drawer ------------------------------------ */
@@ -333,6 +471,21 @@ function chipHtml(key, value, opts = {}) {
   </span>`;
 }
 
+const TIMELINE_STICKY_BOTTOM_PX = 64;
+
+function captureTimelineScroll() {
+  const ol = detailEl.querySelector("ol.timeline");
+  if (!ol) return null;
+  const gap = ol.scrollHeight - ol.scrollTop - ol.clientHeight;
+  return { top: ol.scrollTop, pinBottom: gap <= TIMELINE_STICKY_BOTTOM_PX };
+}
+
+function restoreTimelineScroll(snap) {
+  const ol = detailEl.querySelector("ol.timeline");
+  if (!ol || snap == null) return;
+  ol.scrollTop = snap.pinBottom ? ol.scrollHeight : snap.top;
+}
+
 function renderTimelinePane() {
   if (!acpDetail) return;
   const pane = detailEl.querySelector(".acp-detail-timeline");
@@ -354,7 +507,11 @@ function renderTimelinePane() {
     count.textContent = filterText ? `${shown}/${timeline.length} shown` : `${timeline.length} items`;
   }
   const ol = pane.querySelector("ol.timeline");
+  // Empty <ol> is a fresh shell (full-page re-render); skip restore here so
+  // the caller can put the previous scroll back after layout.
+  const snap = ol && ol.childElementCount > 0 ? captureTimelineScroll() : null;
   if (ol) ol.innerHTML = rows;
+  restoreTimelineScroll(snap);
 }
 
 function renderAcpDetail() {
@@ -364,6 +521,7 @@ function renderAcpDetail() {
   const rawIds = timeline.map((item) =>
     item.type === "chunks" ? item.eventIds.join(", ") : item.eventId,
   );
+  const scrollSnap = captureTimelineScroll();
 
   if (detailTitleEl) detailTitleEl.textContent = `Conversation ${d.bridgePid}`;
   if (detailStatusEl) {
@@ -380,6 +538,7 @@ function renderAcpDetail() {
       ? `<span class="chip chip-model">
           <b>model</b>
           <select id="acp-live-model"></select>
+          <button id="acp-live-model-refresh" class="copy-btn" type="button" title="Re-fetch the model list from the backend (bypasses cache)">refresh</button>
           <button id="acp-live-model-retry" class="copy-btn" type="button" title="Re-submit the currently shown model (retry after a failed live apply)">retry</button>
           <span id="acp-live-model-status" class="hint"></span>
         </span>`
@@ -485,6 +644,8 @@ function renderAcpDetail() {
     showAcpSelectedTiming(null);
     showAcpTimelineRaw(null);
   }
+
+  restoreTimelineScroll(scrollSnap);
 }
 
 function copySelectedRaw() {
@@ -526,13 +687,13 @@ async function selectAcpTimelineItem(item) {
     return;
   }
 
-  showAcpSelectedTiming(item);
   if (typeof item.raw === "string") {
     acpSelectedRaw = item.raw;
-    showAcpTimelineRaw(acpSelectedRaw);
+    showAcpTimelineSelection(item);
     return;
   }
 
+  showAcpSelectedTiming(item);
   showAcpTimelineRaw(null, "加载中…");
   const res = await fetch(`/api/acp-events/${encodeURIComponent(eventId)}`);
   if (seq !== acpTimelineFetchSeq) return;
@@ -547,14 +708,15 @@ async function selectAcpTimelineItem(item) {
   const event = await res.json();
   if (seq !== acpTimelineFetchSeq) return;
   acpSelectedRaw = event.raw ?? "";
-  showAcpTimelineRaw(acpSelectedRaw);
+  showAcpTimelineSelection({ ...item, raw: acpSelectedRaw });
 }
 
 /* ---- model / resume actions ---------------------------------- */
 
-async function modelsForRoute(route) {
+async function modelsForRoute(route, { refresh = false } = {}) {
   if (!route) return [];
-  const data = await fetch(`/api/acp-models?route=${encodeURIComponent(route)}`).then((r) => r.json());
+  const url = `/api/acp-models?route=${encodeURIComponent(route)}${refresh ? "&refresh=1" : ""}`;
+  const data = await fetch(url).then((r) => r.json());
   const models = data.models ?? [];
   acpLiveModelsCache.set(route, models);
   return models;
@@ -613,6 +775,24 @@ function bindAcpLiveModel(selectEl, d) {
   const retryBtn = $("acp-live-model-retry");
   if (retryBtn) {
     retryBtn.addEventListener("click", () => void submit(selectEl.value));
+  }
+  const refreshBtn = $("acp-live-model-refresh");
+  if (refreshBtn) {
+    refreshBtn.addEventListener("click", async () => {
+      const statusEl = $("acp-live-model-status");
+      refreshBtn.disabled = true;
+      if (statusEl) statusEl.textContent = "refreshing…";
+      try {
+        const models = await modelsForRoute(d.route, { refresh: true });
+        if ($("acp-live-model") !== selectEl) return;
+        fillLiveModelSelect(selectEl, models, selectEl.value);
+        if (statusEl) statusEl.textContent = "";
+      } catch (err) {
+        if (statusEl) statusEl.textContent = err instanceof Error ? err.message : String(err);
+      } finally {
+        refreshBtn.disabled = false;
+      }
+    });
   }
 }
 
@@ -698,7 +878,39 @@ function init() {
   }
   acpSelectedPid = pid;
   if (detailTitleEl) detailTitleEl.textContent = `Conversation ${pid}`;
+  const delBtn = $("btn-delete-conversation");
+  if (delBtn) {
+    delBtn.addEventListener("click", async () => {
+      if (acpSelectedPid == null) return;
+      const live = acpDetail?.status === "live";
+      const extra = live
+        ? "\n\nThis conversation is still live; new events may recreate it. Xcode is not stopped."
+        : "";
+      if (!confirm("Delete this Observatory record?" + extra)) return;
+      delBtn.disabled = true;
+      try {
+        const res = await fetch(`/api/acp-conversations/${acpSelectedPid}`, { method: "DELETE" });
+        if (!res.ok && res.status !== 404) {
+          alert(`Delete failed: HTTP ${res.status}`);
+          delBtn.disabled = false;
+          return;
+        }
+        location.href = "/";
+      } catch (err) {
+        alert(`Delete failed: ${err instanceof Error ? err.message : String(err)}`);
+        delBtn.disabled = false;
+      }
+    });
+  }
   loadAcpDetail(pid);
   setLive(true);
 }
+
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  const box = $("acp-image-lightbox");
+  if (!box || box.hidden) return;
+  e.preventDefault();
+  closeAcpImageLightbox();
+});
 init();
