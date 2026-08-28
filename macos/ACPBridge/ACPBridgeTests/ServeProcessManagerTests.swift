@@ -246,12 +246,16 @@ final class ServeProcessManagerStateTests: XCTestCase {
         await manager.start()
 
         XCTAssertNotEqual(manager.state, .ready, "must not stay ready when /health no longer answers")
-        if case .failed = manager.state {
-            // expected — spawn needs the bundled acp-serve binary
-        } else {
-            XCTFail("expected .failed after stale ready, got \(manager.state)")
+        switch manager.state {
+        case .failed, .launching:
+            // Spawn may fail immediately (no binary) or a restart loop may
+            // already be backing off after the embedded sidecar died on 8787.
+            break
+        default:
+            XCTFail("expected .failed or .launching after stale ready, got \(manager.state)")
         }
         XCTAssertFalse(manager.isRunning)
+        manager.shutdown()
     }
 
     func testShutdownReturnsToIdleSoStartCanRunAgain() async {
