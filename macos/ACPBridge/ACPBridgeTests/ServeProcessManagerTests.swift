@@ -164,7 +164,15 @@ final class ServeProcessManagerStateTests: XCTestCase {
     private func makeManager() -> ServeProcessManager {
         ServeProcessManager(
             apiClient: ApiClient(session: MockURLProtocol.makeSession()),
-            healthTimeout: 0.4
+            healthTimeout: 0.4,
+            restartPolicy: ServeRestartPolicy(
+                backoff: [0.5, 1, 2, 4],
+                backoffCap: 8,
+                maxRestarts: 5,
+                window: 60,
+                healthyReset: 30,
+                heartbeatInterval: 10_000
+            )
         )
     }
 
@@ -258,6 +266,54 @@ final class ServeProcessManagerStateTests: XCTestCase {
 
         XCTAssertEqual(manager.state, .idle)
         XCTAssertFalse(manager.isRunning)
+    }
+}
+
+final class ServeRestartPolicyTests: XCTestCase {
+    private let policy = ServeRestartPolicy.default
+    private let t0 = Date(timeIntervalSince1970: 1_000_000)
+
+    func testUserStoppedNeverRestarts() {
+        XCTAssertNil(
+            policy.allowRestart(
+                userStopped: true,
+                consecutiveRestarts: 0,
+                windowStart: nil,
+                now: t0
+            )
+        )
+    }
+
+    func testBackoffSequenceThenCap() {
+        XCTAssertEqual(delay(consecutiveRestarts: 0, windowStart: t0), 0.5)
+        XCTAssertEqual(delay(consecutiveRestarts: 1, windowStart: t0), 1)
+        XCTAssertEqual(delay(consecutiveRestarts: 2, windowStart: t0), 2)
+        XCTAssertEqual(delay(consecutiveRestarts: 3, windowStart: t0), 4)
+        XCTAssertEqual(delay(consecutiveRestarts: 4, windowStart: t0), 8)
+    }
+
+    func testSixthCrashInWindowGivesUp() {
+        XCTAssertNil(delay(consecutiveRestarts: 5, windowStart: t0, now: t0.addingTimeInterval(10)))
+    }
+
+    func testWindowExpiryResetsCount() {
+        XCTAssertEqual(
+            delay(consecutiveRestarts: 5, windowStart: t0, now: t0.addingTimeInterval(60)),
+            0.5
+        )
+    }
+
+    private func delay(
+        consecutiveRestarts: Int,
+        windowStart: Date? = nil,
+        now: Date? = nil
+    ) -> TimeInterval? {
+        policy.allowRestart(
+            userStopped: false,
+            consecutiveRestarts: consecutiveRestarts,
+            windowStart: windowStart,
+            now: now ?? t0
+        )
     }
 }
 

@@ -78,6 +78,46 @@ enum ServeDecisionMaker {
     }
 }
 
+/// Backoff / crash-loop policy for unexpected `acp-serve` exits. Pure so
+/// unit tests can pin `now` without spawning a process.
+struct ServeRestartPolicy: Equatable, Sendable {
+    var backoff: [TimeInterval]
+    var backoffCap: TimeInterval
+    var maxRestarts: Int
+    var window: TimeInterval
+    var healthyReset: TimeInterval
+    var heartbeatInterval: TimeInterval
+
+    static let `default` = ServeRestartPolicy(
+        backoff: [0.5, 1, 2, 4],
+        backoffCap: 8,
+        maxRestarts: 5,
+        window: 60,
+        healthyReset: 30,
+        heartbeatInterval: 15
+    )
+
+    /// Delay before the next restart, or `nil` to give up (user stopped or
+    /// crash-loop cap). `consecutiveRestarts` is the count *before* this attempt.
+    func allowRestart(
+        userStopped: Bool,
+        consecutiveRestarts: Int,
+        windowStart: Date?,
+        now: Date
+    ) -> TimeInterval? {
+        if userStopped { return nil }
+        let count: Int
+        if let windowStart, now.timeIntervalSince(windowStart) < window {
+            count = consecutiveRestarts
+        } else {
+            count = 0
+        }
+        if count >= maxRestarts { return nil }
+        if count < backoff.count { return backoff[count] }
+        return backoffCap
+    }
+}
+
 /// Lifecycle of the managed `acp-serve` process, published so any view can
 /// render it — the window is only one possible observer, and may never open.
 enum ServeState: Equatable {
@@ -97,17 +137,32 @@ final class ServeProcessManager: ObservableObject {
     private let fileManager: FileManager
     private let bundle: Bundle
     private let healthTimeout: TimeInterval
+    private let restartPolicy: ServeRestartPolicy
+
+    private var userStopped = false
+    private var consecutiveRestarts = 0
+    private var restartWindowStart: Date?
+    private var readySince: Date?
+    private var heartbeatTask: Task<Void, Never>?
+    private var restartTask: Task<Void, Never>?
 
     init(
         apiClient: ApiClient = ApiClient(),
         fileManager: FileManager = .default,
         bundle: Bundle = .main,
-        healthTimeout: TimeInterval = 8
+        healthTimeout: TimeInterval = 8,
+        restartPolicy: ServeRestartPolicy = .default
     ) {
         self.apiClient = apiClient
         self.fileManager = fileManager
         self.bundle = bundle
         self.healthTimeout = healthTimeout
+        self.restartPolicy = restartPolicy
+    }
+
+    deinit {
+        heartbeatTask?.cancel()
+        restartTask?.cancel()
     }
 
     /// Idempotent, non-throwing entry point that publishes progress through
@@ -115,27 +170,35 @@ final class ServeProcessManager: ObservableObject {
     /// or the window closed) still starts the server; the window's Retry
     /// button and `ContentView.task` call the same thing.
     ///
+    /// User Retry (from `.idle` / `.failed`) resets the crash-loop counters.
     /// If we already believe the server is `.ready` but `/health` no longer
-    /// answers (serve crashed, was killed, or died with a suspended debug
-    /// session), clear the stale state and spawn again — otherwise the
-    /// Observatory WebView stays blank forever.
+    /// answers, clear the stale state and spawn again.
     func start() async {
+        userStopped = false
         switch state {
         case .launching:
             return
         case .ready:
             if await isOurServeHealthy() {
+                startHeartbeat()
                 return
             }
+            heartbeatTask?.cancel()
+            heartbeatTask = nil
             clearManagedProcess()
             state = .launching
         case .idle, .failed:
+            consecutiveRestarts = 0
+            restartWindowStart = nil
+            cancelBackgroundWork()
             state = .launching
         }
         do {
             try await ensureRunning()
-            state = .ready
+            markReady()
         } catch {
+            // A crash handler may already own recovery.
+            if restartTask != nil, !userStopped { return }
             state = .failed(error.localizedDescription)
         }
     }
@@ -168,6 +231,9 @@ final class ServeProcessManager: ObservableObject {
     /// Terminates `acp-serve` only if this manager spawned it. Never touches
     /// an `acp-bridge` process — those are owned by Xcode over stdio.
     func shutdown() {
+        userStopped = true
+        cancelBackgroundWork()
+        readySince = nil
         defer { state = .idle }
         guard let process, process.isRunning else {
             clearManagedProcess()
@@ -225,13 +291,122 @@ final class ServeProcessManager: ObservableObject {
 
     private func handleServeExited(_ terminated: Process) {
         guard process === terminated else { return }
+        let status = terminated.terminationStatus
         clearManagedProcess()
+        if userStopped { return }
         switch state {
         case .ready, .launching:
-            state = .failed("acp-serve exited unexpectedly (status \(terminated.terminationStatus)).")
+            beginRestartLoop(lastStatus: status)
         case .idle, .failed:
             break
         }
+    }
+
+    private func beginRestartLoop(lastStatus: Int32) {
+        if userStopped { return }
+        restartTask?.cancel()
+        heartbeatTask?.cancel()
+        heartbeatTask = nil
+        state = .launching
+        isRunning = false
+        restartTask = Task { @MainActor [weak self] in
+            await self?.runRestartLoop(lastStatus: lastStatus)
+        }
+    }
+
+    private func runRestartLoop(lastStatus: Int32) async {
+        var status = lastStatus
+        while !Task.isCancelled && !userStopped {
+            let now = Date()
+            let delay = restartPolicy.allowRestart(
+                userStopped: userStopped,
+                consecutiveRestarts: consecutiveRestarts,
+                windowStart: restartWindowStart,
+                now: now
+            )
+            guard let delay else {
+                state = .failed(
+                    "acp-serve crashed \(max(consecutiveRestarts, restartPolicy.maxRestarts)) times in 60s (last status \(status)). Use Retry."
+                )
+                restartTask = nil
+                return
+            }
+            if restartWindowStart == nil || now.timeIntervalSince(restartWindowStart!) >= restartPolicy.window {
+                consecutiveRestarts = 0
+                restartWindowStart = now
+            }
+            consecutiveRestarts += 1
+            state = .launching
+            if delay > 0 {
+                do {
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled, !userStopped else { return }
+            }
+            do {
+                try await ensureRunning()
+                markReady()
+                restartTask = nil
+                return
+            } catch let error as ServeError {
+                switch error {
+                case .portOccupiedByOther, .healthCheckFailed, .bundledExecutableMissing:
+                    state = .failed(error.localizedDescription)
+                    restartTask = nil
+                    return
+                case .launchFailed, .healthTimeout:
+                    continue
+                }
+            } catch {
+                state = .failed(error.localizedDescription)
+                restartTask = nil
+                return
+            }
+        }
+    }
+
+    private func startHeartbeat() {
+        heartbeatTask?.cancel()
+        let interval = restartPolicy.heartbeatInterval
+        guard interval > 0 else { return }
+        heartbeatTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                let interval = self?.restartPolicy.heartbeatInterval ?? 15
+                do {
+                    try await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+                } catch {
+                    return
+                }
+                guard let self, !Task.isCancelled, !self.userStopped else { return }
+                guard self.state == .ready else { continue }
+                if await self.isOurServeHealthy() {
+                    if let since = self.readySince,
+                       Date().timeIntervalSince(since) >= self.restartPolicy.healthyReset {
+                        self.consecutiveRestarts = 0
+                        self.restartWindowStart = nil
+                    }
+                } else {
+                    self.clearManagedProcess()
+                    self.beginRestartLoop(lastStatus: 0)
+                    return
+                }
+            }
+        }
+    }
+
+    private func markReady() {
+        readySince = Date()
+        state = .ready
+        startHeartbeat()
+    }
+
+    private func cancelBackgroundWork() {
+        heartbeatTask?.cancel()
+        heartbeatTask = nil
+        restartTask?.cancel()
+        restartTask = nil
     }
 
     private func clearManagedProcess() {
