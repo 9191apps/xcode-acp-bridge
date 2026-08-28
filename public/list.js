@@ -305,7 +305,10 @@ acpConversationListEl.addEventListener("click", (e) => {
   } catch {
     // sessionStorage unavailable — ignore
   }
-  location.href = `/conversation.html?pid=${pid}`;
+  const sessionId = tr.classList.contains("session-parent") ? tr.dataset.session : "";
+  location.href = sessionId
+    ? `/conversation.html?session=${encodeURIComponent(sessionId)}`
+    : `/conversation.html?pid=${pid}`;
 });
 
 listFilterEl.addEventListener("input", () => {

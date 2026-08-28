@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { AcpEvent } from "../src/acp/types";
-import { conversationDetail, summarizeConversations } from "../src/acp/conversations";
+import {
+  conversationDetail,
+  sessionDetailFromSpawns,
+  summarizeConversations,
+  type ConversationSummary,
+} from "../src/acp/conversations";
 
 function ev(over: Partial<AcpEvent> & Pick<AcpEvent, "id" | "ts" | "kind">): AcpEvent {
   return {
@@ -361,5 +366,182 @@ describe("conversationDetail timeline", () => {
       eventId: "10-2",
       raw: '{"prompt":true}',
     });
+  });
+
+  test("timeline items carry bridgePid", () => {
+    const detail = conversationDetail(
+      [
+        ev({
+          id: "10-1",
+          ts: "t0",
+          kind: "process_start",
+          route: "opencode",
+          raw: '{"route":"opencode"}',
+        }),
+      ],
+      10,
+    );
+    expect(detail!.timeline[0]).toMatchObject({ type: "process", bridgePid: 10 });
+  });
+});
+
+describe("sessionDetailFromSpawns", () => {
+  const sid = "ses_shared";
+  const tinyPng =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+  function summary(over: Partial<ConversationSummary> & Pick<ConversationSummary, "bridgePid">): ConversationSummary {
+    return {
+      backendPid: 1,
+      route: "opencode",
+      cwd: "/p",
+      mcpXcodeSessionId: null,
+      acpSessionId: sid,
+      startedAt: "2026-08-27T14:00:00.000Z",
+      endedAt: "2026-08-27T14:10:00.000Z",
+      lastActivityAt: "2026-08-27T14:10:00.000Z",
+      status: "ended",
+      durationMs: 600000,
+      promptCount: 1,
+      toolCallCount: 0,
+      eventCount: 3,
+      model: null,
+      ...over,
+    };
+  }
+
+  test("concatenates spawn timelines so the first prompt image is still visible after resume", () => {
+    const imagePrompt = JSON.stringify({
+      method: "session/prompt",
+      params: {
+        sessionId: sid,
+        prompt: [
+          { type: "text", text: "Project structure…" },
+          { type: "image", mimeType: "image/png", data: tinyPng },
+          { type: "text", text: "观察GFM Table的渲染" },
+        ],
+      },
+    });
+    const textPrompt = JSON.stringify({
+      method: "session/prompt",
+      params: { sessionId: sid, prompt: [{ type: "text", text: "继续验证截图" }] },
+    });
+    const eventsByPid = new Map<number, AcpEvent[]>([
+      [
+        10,
+        [
+          ev({
+            id: "10-1",
+            ts: "2026-08-27T14:00:00.000Z",
+            kind: "process_start",
+            bridgePid: 10,
+            route: "opencode",
+            raw: '{"route":"opencode"}',
+          }),
+          ev({
+            id: "10-2",
+            ts: "2026-08-27T14:00:01.000Z",
+            kind: "rpc",
+            bridgePid: 10,
+            method: "session/prompt",
+            dir: "c2a",
+            raw: imagePrompt,
+          }),
+        ],
+      ],
+      [
+        20,
+        [
+          ev({
+            id: "20-1",
+            ts: "2026-08-27T14:50:00.000Z",
+            kind: "process_start",
+            bridgePid: 20,
+            route: "opencode",
+            raw: '{"route":"opencode"}',
+          }),
+          ev({
+            id: "20-2",
+            ts: "2026-08-27T14:50:01.000Z",
+            kind: "rpc",
+            bridgePid: 20,
+            method: "session/prompt",
+            dir: "c2a",
+            raw: textPrompt,
+          }),
+        ],
+      ],
+    ]);
+    const detail = sessionDetailFromSpawns(
+      sid,
+      [
+        summary({ bridgePid: 10, startedAt: "2026-08-27T14:00:00.000Z", lastActivityAt: "2026-08-27T14:00:01.000Z" }),
+        summary({
+          bridgePid: 20,
+          startedAt: "2026-08-27T14:50:00.000Z",
+          lastActivityAt: "2026-08-27T14:50:01.000Z",
+          status: "live",
+        }),
+      ],
+      (pid) => eventsByPid.get(pid) ?? [],
+    );
+    expect(detail).not.toBeNull();
+    expect(detail!.kind).toBe("session");
+    expect(detail!.bridgePid).toBe(20);
+    expect(detail!.liveBridgePid).toBe(20);
+    expect(detail!.spawns).toHaveLength(2);
+    const prompts = detail!.timeline.filter((i) => i.type === "rpc" && i.method === "session/prompt");
+    expect(prompts).toHaveLength(2);
+    expect(prompts[0]).toMatchObject({ bridgePid: 10, imageCount: 1 });
+    expect(prompts[1]).toMatchObject({ bridgePid: 20, imageCount: 0 });
+  });
+
+  test("does not fold tool_call_update across spawn pids", () => {
+    const eventsByPid = new Map<number, AcpEvent[]>([
+      [
+        10,
+        [
+          ev({
+            id: "10-1",
+            ts: "t1",
+            kind: "rpc",
+            bridgePid: 10,
+            sessionUpdate: "tool_call",
+            toolName: "read",
+            raw: "{}",
+          }),
+        ],
+      ],
+      [
+        20,
+        [
+          ev({
+            id: "20-1",
+            ts: "t2",
+            kind: "rpc",
+            bridgePid: 20,
+            sessionUpdate: "tool_call_update",
+            toolName: "read",
+            raw: "{}",
+          }),
+        ],
+      ],
+    ]);
+    const detail = sessionDetailFromSpawns(
+      sid,
+      [
+        summary({ bridgePid: 10, startedAt: "2026-08-27T14:00:00.000Z" }),
+        summary({ bridgePid: 20, startedAt: "2026-08-27T14:50:00.000Z" }),
+      ],
+      (pid) => eventsByPid.get(pid) ?? [],
+    );
+    const tools = detail!.timeline.filter((i) => i.type === "tool_call");
+    expect(tools).toHaveLength(2);
+    expect(tools[0]).toMatchObject({ bridgePid: 10, updateCount: 0 });
+    expect(tools[1]).toMatchObject({ bridgePid: 20 });
+  });
+
+  test("returns null when no spawns match", () => {
+    expect(sessionDetailFromSpawns(sid, [], () => [])).toBeNull();
   });
 });

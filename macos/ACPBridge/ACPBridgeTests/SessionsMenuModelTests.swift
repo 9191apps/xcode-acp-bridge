@@ -318,6 +318,15 @@ final class SessionsMenuModelTests: XCTestCase {
 
         let url = model.observatoryURL(for: session, baseURL: URL(string: "http://127.0.0.1:8787")!)
 
+        XCTAssertEqual(url.absoluteString, "http://127.0.0.1:8787/conversation.html?session=sess-abc")
+    }
+
+    func testObservatoryURLFallsBackToPidWhenSessionIdMissing() throws {
+        let session = try session(bridgePid: 4242, acpSessionId: nil, status: "ended", route: "cursor")
+        let model = SessionsMenuModel(apiClient: ApiClient())
+
+        let url = model.observatoryURL(for: session, baseURL: URL(string: "http://127.0.0.1:8787")!)
+
         XCTAssertEqual(url.absoluteString, "http://127.0.0.1:8787/conversation.html?pid=4242")
     }
 

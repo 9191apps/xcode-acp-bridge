@@ -768,4 +768,80 @@ describe("acp dashboard api", () => {
     expect(sessionGroups[0].representativeBridgePid).toBe(livePid);
     expect(sessionGroups[0].representative).toBeUndefined();
   });
+
+  test("GET /api/acp-sessions/:id concatenates spawn timelines", async () => {
+    const store = new AcpEventStore(eventsPath);
+    const imagePrompt = JSON.stringify({
+      method: "session/prompt",
+      params: {
+        sessionId: "sess-shared",
+        prompt: [{ type: "image", mimeType: "image/png", data: "aaaa" }],
+      },
+    });
+    await store.append(
+      ev({
+        id: "100-1",
+        kind: "process_start",
+        bridgePid: 100,
+        route: "cursor",
+        raw: JSON.stringify({ route: "cursor" }),
+        ts: "2026-08-21T14:00:00.000Z",
+      }),
+    );
+    await store.append(
+      ev({
+        id: "100-2",
+        kind: "rpc",
+        bridgePid: 100,
+        method: "session/prompt",
+        dir: "c2a",
+        sessionHints: ["sess-shared"],
+        raw: imagePrompt,
+        ts: "2026-08-21T14:00:01.000Z",
+      }),
+    );
+    await store.append(
+      ev({
+        id: "200-1",
+        kind: "process_start",
+        bridgePid: 200,
+        route: "cursor",
+        raw: JSON.stringify({ route: "cursor" }),
+        ts: "2026-08-22T14:00:00.000Z",
+      }),
+    );
+    await store.append(
+      ev({
+        id: "200-2",
+        kind: "rpc",
+        bridgePid: 200,
+        method: "session/prompt",
+        dir: "c2a",
+        sessionHints: ["sess-shared"],
+        raw: JSON.stringify({
+          method: "session/prompt",
+          params: { prompt: [{ type: "text", text: "继续" }] },
+        }),
+        ts: "2026-08-22T14:00:01.000Z",
+      }),
+    );
+    const app = acpApp(store);
+    const missing = await app.request("http://127.0.0.1/api/acp-sessions/nope");
+    expect(missing.status).toBe(404);
+    const res = await app.request("http://127.0.0.1/api/acp-sessions/sess-shared");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      kind: string;
+      acpSessionId: string;
+      spawns: unknown[];
+      timeline: Array<{ type: string; method?: string; imageCount?: number; bridgePid?: number }>;
+    };
+    expect(body.kind).toBe("session");
+    expect(body.acpSessionId).toBe("sess-shared");
+    expect(body.spawns).toHaveLength(2);
+    const prompts = body.timeline.filter((i) => i.method === "session/prompt");
+    expect(prompts).toHaveLength(2);
+    expect(prompts[0]).toMatchObject({ bridgePid: 100, imageCount: 1 });
+    expect(prompts[1]).toMatchObject({ bridgePid: 200, imageCount: 0 });
+  });
 });

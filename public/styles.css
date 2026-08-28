@@ -983,6 +983,12 @@ a.back-btn {
   display: none;
 }
 
+.timeline li.tl-spawn-break {
+  margin-top: 0.55rem;
+  padding-top: 0.7rem;
+  border-top: 1px dashed var(--cyan);
+}
+
 /* Vertical rail + direction dot */
 .timeline li::before {
   content: "";
@@ -1535,6 +1541,38 @@ tbody tr.session-parent td:first-child {
   color: var(--cyan);
   font-size: 11px;
   margin-left: 0.35rem;
+}
+
+.chip.chip-spawns {
+  gap: 0.45rem;
+}
+
+.spawn-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+}
+
+a.spawn-chip {
+  color: var(--text);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  background: var(--panel-3);
+  border-radius: 5px;
+  padding: 1px 7px;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+}
+
+a.spawn-chip:hover {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+a.spawn-chip.live {
+  border-color: rgba(61, 220, 132, 0.45);
+  color: var(--green);
 }
 tbody tr.session-child {
   background: var(--bg-deep);

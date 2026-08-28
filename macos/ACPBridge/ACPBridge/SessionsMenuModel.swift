@@ -226,15 +226,18 @@ final class SessionsMenuModel: ObservableObject {
         return options
     }
 
-    /// Builds the Observatory deep link for `session`'s representative
-    /// bridge pid — `/conversation.html?pid=N`, already supported
-    /// server-side by `detail.js`.
+    /// Builds the Observatory deep link. Grouped sessions open the merged
+    /// timeline (`?session=`). Spawns without an ACP session id keep `?pid=`.
     func observatoryURL(for session: SessionSummary, baseURL: URL) -> URL {
         var components = URLComponents(
             url: baseURL.appendingPathComponent("conversation.html"),
             resolvingAgainstBaseURL: false
         )!
-        components.queryItems = [URLQueryItem(name: "pid", value: String(session.bridgePid))]
+        if let sessionId = session.acpSessionId, !sessionId.isEmpty {
+            components.queryItems = [URLQueryItem(name: "session", value: sessionId)]
+        } else {
+            components.queryItems = [URLQueryItem(name: "pid", value: String(session.bridgePid))]
+        }
         return components.url!
     }
 

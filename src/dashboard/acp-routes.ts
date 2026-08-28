@@ -4,7 +4,7 @@ import { stream } from "hono/streaming";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { ConversationSummary } from "../acp/conversations";
+import { sessionDetailFromSpawns, type ConversationSummary } from "../acp/conversations";
 import { writeModelCommand } from "../acp/commands";
 import { repoRoot } from "../acp/config";
 import { observedModelsFromEvents, runModelsCommand } from "../acp/models";
@@ -391,6 +391,24 @@ export function createAcpDashboardApp(
     writeAcpRouteState(config.routeStatePath, state);
     logModelPut(config, { endpoint: "route-state", route, model: state.model ?? null, outcome: "ok", ...requestMeta(c) });
     return c.json({ ...routeResponse(config), source: "state" as const });
+  });
+
+  app.get("/api/acp-sessions/:sessionId", (c) => {
+    const sessionId = c.req.param("sessionId");
+    if (!sessionId) {
+      return c.json({ error: "not found" }, 404);
+    }
+    const stored = loadSessionModels(config.eventsPath);
+    const rows = store.summaries().map((row) => withLiveStatus(overlayStoredModel(row, stored)));
+    const spawns = rows.filter((row) => row.acpSessionId === sessionId);
+    if (spawns.length === 0) {
+      return c.json({ error: "not found" }, 404);
+    }
+    const detail = sessionDetailFromSpawns(sessionId, spawns, (pid) => store.eventsForPid(pid));
+    if (!detail) {
+      return c.json({ error: "not found" }, 404);
+    }
+    return c.json(overlayStoredModel(detail, stored));
   });
 
   app.get("/api/acp-conversations/:bridgePid", (c) => {

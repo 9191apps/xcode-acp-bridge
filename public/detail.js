@@ -6,6 +6,7 @@ const detailStatusEl = $("detail-status");
 
 let acpDetail = null;
 let acpSelectedPid = null;
+let acpSelectedSessionId = null;
 let acpDetailRefreshTimer = null;
 let acpSelectedEventId = null;
 let acpSelectedRaw = null;
@@ -29,7 +30,7 @@ function renderAcpPlaceholder() {
     <div class="empty-state">
       <div class="empty-glyph" aria-hidden="true">⌁</div>
       <p class="empty-title">Select a conversation</p>
-      <p class="empty-hint">Go back to the conversation list and open one, or use /conversation.html?pid=NNN.</p>
+      <p class="empty-hint">Go back to the conversation list and open one, or use /conversation.html?pid=NNN or ?session=ses_….</p>
       <a class="btn ghost" href="/">← Conversations</a>
     </div>`;
 }
@@ -41,7 +42,7 @@ function renderAcpNotFound() {
     <div class="empty-state">
       <div class="empty-glyph" aria-hidden="true">✕</div>
       <p class="empty-title">Conversation not found</p>
-      <p class="empty-hint">It may have been cleared or the pid is invalid.</p>
+      <p class="empty-hint">It may have been cleared, or the pid / session id is invalid.</p>
       <a class="btn ghost" href="/">← Conversations</a>
     </div>`;
 }
@@ -61,6 +62,10 @@ function timelineSource(item) {
 
 function timelineBodyLabel(item) {
   if (item.type === "process") {
+    if (acpDetail?.kind === "session" && item.kind === "process_start") {
+      const route = item.route ?? "backend";
+      return item.bridgePid != null ? `spawn ${route} · pid ${item.bridgePid}` : `spawn ${route}`;
+    }
     return item.route ? `${item.kind} ${item.route}` : item.kind;
   }
   if (item.type === "rpc") {
@@ -168,6 +173,7 @@ function timelineItemSearchText(item) {
     item.name ?? "",
     item.route ?? "",
     item.kind ?? "",
+    item.bridgePid != null ? `pid ${item.bridgePid}` : "",
   ].join(" ");
 }
 
@@ -192,7 +198,12 @@ function timelineItemHtml(item, i, selected, match) {
       ? `<span class="tl-image-tag">[image]</span>`
       : "";
   const time = item.ts ?? item.firstTs ?? item.lastTs ?? "";
-  return `<li data-index="${i}" data-event-id="${escapeHtml(eventId ?? "")}" class="${selectedClass} ${filteredClass}">
+  const prev = acpDetail?.timeline?.[i - 1];
+  const spawnBreak =
+    acpDetail?.kind === "session" && prev != null && prev.bridgePid !== item.bridgePid
+      ? "tl-spawn-break"
+      : "";
+  return `<li data-index="${i}" data-event-id="${escapeHtml(eventId ?? "")}" class="${selectedClass} ${filteredClass} ${spawnBreak}">
     <span class="tl-dot dir-${source.key}" aria-hidden="true"></span>
     <span class="tl-time">${escapeHtml(time ? fmtClock(time) : "")}</span>
     <span class="dir-tag dir-${source.key}">${escapeHtml(source.label)}</span>
@@ -523,7 +534,20 @@ function renderAcpDetail() {
   );
   const scrollSnap = captureTimelineScroll();
 
-  if (detailTitleEl) detailTitleEl.textContent = `Conversation ${d.bridgePid}`;
+  if (detailTitleEl) {
+    if (d.kind === "session" && d.acpSessionId) {
+      detailTitleEl.textContent = `Session ${middleElide(d.acpSessionId, 10, 8)}`;
+      detailTitleEl.title = d.acpSessionId;
+    } else {
+      detailTitleEl.textContent = `Conversation ${d.bridgePid}`;
+      detailTitleEl.title = "";
+    }
+  }
+  const delBtn = $("btn-delete-conversation");
+  if (delBtn) {
+    delBtn.hidden = false;
+    delBtn.disabled = false;
+  }
   if (detailStatusEl) {
     const kind = d.status === "live" ? "live" : d.status === "error" ? "error" : "ok";
     detailStatusEl.className = `pill pill-${kind}`;
@@ -557,10 +581,23 @@ function renderAcpDetail() {
     }
   </span>`;
 
+  const pidChip =
+    d.kind === "session" && Array.isArray(d.spawns)
+      ? `<span class="chip chip-spawns">
+          <b>spawns</b>
+          <span class="spawn-chips">${d.spawns
+            .map((s) => {
+              const live = s.status === "live" ? " live" : "";
+              return `<a class="spawn-chip${live}" href="/conversation.html?pid=${s.bridgePid}" title="Open spawn pid ${s.bridgePid}">pid ${s.bridgePid}</a>`;
+            })
+            .join("")}</span>
+        </span>`
+      : chipHtml("bridgePid", d.bridgePid);
+
   detailEl.innerHTML = `
     <div class="acp-detail-header">
       <div class="detail-chips">
-        ${chipHtml("bridgePid", d.bridgePid)}
+        ${pidChip}
         ${chipHtml("route", d.route)}
         ${modelChip}
         ${sessionChip}
@@ -711,7 +748,9 @@ async function selectAcpTimelineItem(item) {
   showAcpTimelineSelection({ ...item, raw: acpSelectedRaw });
 }
 
-/* ---- model / resume actions ---------------------------------- */
+function conversationWritePid(d) {
+  return d?.liveBridgePid ?? d?.representativeBridgePid ?? d?.bridgePid ?? acpSelectedPid;
+}
 
 async function modelsForRoute(route, { refresh = false } = {}) {
   if (!route) return [];
@@ -751,7 +790,7 @@ function bindAcpLiveModel(selectEl, d) {
       return;
     }
     try {
-      const res = await fetch(`/api/acp-conversations/${d.bridgePid}/model`, {
+      const res = await fetch(`/api/acp-conversations/${conversationWritePid(d)}/model`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model }),
@@ -800,7 +839,7 @@ function bindAcpResumeOpencode(btn, d) {
   btn.addEventListener("click", async () => {
     btn.disabled = true;
     try {
-      const res = await fetch(`/api/acp-conversations/${d.bridgePid}/resume`, { method: "POST" });
+      const res = await fetch(`/api/acp-conversations/${conversationWritePid(d)}/resume`, { method: "POST" });
       if (!res.ok) {
         let msg = `HTTP ${res.status}`;
         try {
@@ -821,18 +860,81 @@ function bindAcpResumeOpencode(btn, d) {
 
 /* ---- data loading -------------------------------------------- */
 
+function hasOpenConversation() {
+  return acpSelectedSessionId != null || acpSelectedPid != null;
+}
+
+function refreshAcpDetail() {
+  if (acpSelectedSessionId) {
+    loadAcpSessionDetail(acpSelectedSessionId);
+    return;
+  }
+  if (acpSelectedPid != null) loadAcpDetail(acpSelectedPid);
+}
+
 async function loadAcpDetail(pid) {
   const seq = ++acpDetailFetchSeq;
   const res = await fetch(`/api/acp-conversations/${pid}`);
   if (seq !== acpDetailFetchSeq) return;
   if (!res.ok) {
-    if (acpSelectedPid === pid) renderAcpNotFound();
+    if (acpSelectedPid === pid && acpSelectedSessionId == null) renderAcpNotFound();
     return;
   }
-  if (acpSelectedPid !== pid) return;
+  if (acpSelectedPid !== pid || acpSelectedSessionId != null) return;
   acpDetail = await res.json();
   if (seq !== acpDetailFetchSeq) return;
   renderAcpDetail();
+}
+
+async function loadAcpSessionDetail(sessionId) {
+  const seq = ++acpDetailFetchSeq;
+  const res = await fetch(`/api/acp-sessions/${encodeURIComponent(sessionId)}`);
+  if (seq !== acpDetailFetchSeq) return;
+  if (!res.ok) {
+    if (acpSelectedSessionId === sessionId) renderAcpNotFound();
+    return;
+  }
+  if (acpSelectedSessionId !== sessionId) return;
+  acpDetail = await res.json();
+  if (seq !== acpDetailFetchSeq) return;
+  if (typeof acpDetail.bridgePid === "number") acpSelectedPid = acpDetail.bridgePid;
+  renderAcpDetail();
+}
+
+async function deleteOpenConversation() {
+  const d = acpDetail;
+  const pids =
+    d?.kind === "session" && Array.isArray(d.spawns) && d.spawns.length > 0
+      ? d.spawns.map((s) => s.bridgePid)
+      : acpSelectedPid != null
+        ? [acpSelectedPid]
+        : [];
+  if (pids.length === 0) return;
+  const live = d?.status === "live";
+  const extra = live
+    ? "\n\nThis conversation is still live; new events may recreate it. Xcode is not stopped."
+    : "";
+  const prompt =
+    pids.length > 1
+      ? `Delete all Observatory records for this session (${pids.length} spawns)?`
+      : "Delete this Observatory record?";
+  if (!confirm(prompt + extra)) return;
+  const delBtn = $("btn-delete-conversation");
+  if (delBtn) delBtn.disabled = true;
+  try {
+    for (const pid of pids) {
+      const res = await fetch(`/api/acp-conversations/${pid}`, { method: "DELETE" });
+      if (!res.ok && res.status !== 404) {
+        alert(`Delete failed: HTTP ${res.status}`);
+        if (delBtn) delBtn.disabled = false;
+        return;
+      }
+    }
+    location.href = "/";
+  } catch (err) {
+    alert(`Delete failed: ${err instanceof Error ? err.message : String(err)}`);
+    if (delBtn) delBtn.disabled = false;
+  }
 }
 
 /* ---- event wiring ------------------------------------------- */
@@ -853,7 +955,7 @@ acpEs.onerror = () => {
   setLive(false);
 };
 acpEs.addEventListener("acp", async () => {
-  if (acpSelectedPid == null) return;
+  if (!hasOpenConversation()) return;
   // Keep the open raw pane stable while the user is inspecting a timeline row.
   if (acpSelectedEventId != null) return;
   if (acpLiveModelFocused || acpDetailDragging) return;
@@ -862,15 +964,30 @@ acpEs.addEventListener("acp", async () => {
   }
   acpDetailRefreshTimer = setTimeout(() => {
     acpDetailRefreshTimer = null;
-    if (acpSelectedPid == null || acpSelectedEventId != null || acpLiveModelFocused || acpDetailDragging) return;
-    loadAcpDetail(acpSelectedPid);
+    if (!hasOpenConversation() || acpSelectedEventId != null || acpLiveModelFocused || acpDetailDragging) return;
+    refreshAcpDetail();
   }, 400);
 });
 
 /* ---- init ---------------------------------------------------- */
 
 function init() {
-  const pid = Number(new URLSearchParams(location.search).get("pid"));
+  const params = new URLSearchParams(location.search);
+  const sessionId = params.get("session");
+  const pid = Number(params.get("pid"));
+  const delBtn = $("btn-delete-conversation");
+  if (delBtn) delBtn.addEventListener("click", () => void deleteOpenConversation());
+
+  if (sessionId) {
+    acpSelectedSessionId = sessionId;
+    if (detailTitleEl) {
+      detailTitleEl.textContent = `Session ${middleElide(sessionId, 10, 8)}`;
+      detailTitleEl.title = sessionId;
+    }
+    loadAcpSessionDetail(sessionId);
+    setLive(true);
+    return;
+  }
   if (!Number.isFinite(pid) || pid <= 0) {
     renderAcpPlaceholder();
     setLive(true);
@@ -878,30 +995,6 @@ function init() {
   }
   acpSelectedPid = pid;
   if (detailTitleEl) detailTitleEl.textContent = `Conversation ${pid}`;
-  const delBtn = $("btn-delete-conversation");
-  if (delBtn) {
-    delBtn.addEventListener("click", async () => {
-      if (acpSelectedPid == null) return;
-      const live = acpDetail?.status === "live";
-      const extra = live
-        ? "\n\nThis conversation is still live; new events may recreate it. Xcode is not stopped."
-        : "";
-      if (!confirm("Delete this Observatory record?" + extra)) return;
-      delBtn.disabled = true;
-      try {
-        const res = await fetch(`/api/acp-conversations/${acpSelectedPid}`, { method: "DELETE" });
-        if (!res.ok && res.status !== 404) {
-          alert(`Delete failed: HTTP ${res.status}`);
-          delBtn.disabled = false;
-          return;
-        }
-        location.href = "/";
-      } catch (err) {
-        alert(`Delete failed: ${err instanceof Error ? err.message : String(err)}`);
-        delBtn.disabled = false;
-      }
-    });
-  }
   loadAcpDetail(pid);
   setLive(true);
 }

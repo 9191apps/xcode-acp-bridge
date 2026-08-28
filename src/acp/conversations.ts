@@ -1,5 +1,6 @@
 import { countAcpImagesFromRaw } from "./content-blocks";
 import { extractRpcMeta } from "./parse";
+import { pickRepresentative } from "./session-list-group";
 import type { AcpEvent } from "./types";
 
 export type ConversationStatus = "live" | "stale" | "ended" | "error";
@@ -32,6 +33,7 @@ export type TimelineItem =
       raw: string;
       durationMs: number | null;
       gapMs: number | null;
+      bridgePid: number;
     }
   | {
       type: "rpc";
@@ -44,6 +46,7 @@ export type TimelineItem =
       durationMs: number | null;
       gapMs: number | null;
       imageCount: number;
+      bridgePid: number;
     }
   | {
       type: "tool_call";
@@ -57,6 +60,7 @@ export type TimelineItem =
       durationMs: number | null;
       gapMs: number | null;
       imageCount: number;
+      bridgePid: number;
     }
   | {
       type: "chunks";
@@ -70,9 +74,19 @@ export type TimelineItem =
       raw: string;
       durationMs: number | null;
       gapMs: number | null;
+      bridgePid: number;
     };
 
 export type ConversationDetail = ConversationSummary & { timeline: TimelineItem[] };
+
+export type SessionDetail = ConversationSummary & {
+  kind: "session";
+  acpSessionId: string;
+  spawns: ConversationSummary[];
+  representativeBridgePid: number;
+  liveBridgePid: number | null;
+  timeline: TimelineItem[];
+};
 
 const PROCESS_KINDS = new Set<AcpEvent["kind"]>(["process_start", "process_start_error", "process_end"]);
 export const CHUNK_UPDATES = new Set(["agent_message_chunk", "agent_thought_chunk"]);
@@ -264,6 +278,10 @@ function summarizeGroup(bridgePid: number, events: AcpEvent[]): ConversationSumm
   };
 }
 
+function sameSpawn(last: TimelineItem | undefined, event: AcpEvent): boolean {
+  return last != null && last.bridgePid === event.bridgePid;
+}
+
 function buildTimeline(events: AcpEvent[]): TimelineItem[] {
   const timeline: TimelineItem[] = [];
 
@@ -278,6 +296,7 @@ function buildTimeline(events: AcpEvent[]): TimelineItem[] {
         raw: event.raw,
         durationMs: null,
         gapMs: null,
+        bridgePid: event.bridgePid,
       });
       continue;
     }
@@ -295,13 +314,14 @@ function buildTimeline(events: AcpEvent[]): TimelineItem[] {
         durationMs: null,
         gapMs: null,
         imageCount: countAcpImagesFromRaw(event.raw),
+        bridgePid: event.bridgePid,
       });
       continue;
     }
 
     if (event.sessionUpdate === "tool_call_update") {
       const last = timeline.at(-1);
-      if (last?.type === "tool_call") {
+      if (last?.type === "tool_call" && sameSpawn(last, event)) {
         last.updateCount += 1;
         last.raw = event.raw;
         last.lastTs = event.ts;
@@ -320,6 +340,7 @@ function buildTimeline(events: AcpEvent[]): TimelineItem[] {
           durationMs: null,
           gapMs: null,
           imageCount: countAcpImagesFromRaw(event.raw),
+          bridgePid: event.bridgePid,
         });
       }
       continue;
@@ -331,7 +352,7 @@ function buildTimeline(events: AcpEvent[]): TimelineItem[] {
       const piece = event.chunkText ?? chunkTextFromRaw(event.raw);
       const count = event.chunkCount ?? 1;
       const last = timeline.at(-1);
-      if (last?.type === "chunks" && last.update === event.sessionUpdate) {
+      if (last?.type === "chunks" && last.update === event.sessionUpdate && sameSpawn(last, event)) {
         last.count += count;
         last.lastTs = event.chunkLastTs ?? event.ts;
         last.eventIds.push(event.id);
@@ -351,6 +372,7 @@ function buildTimeline(events: AcpEvent[]): TimelineItem[] {
           raw: event.raw,
           durationMs: null,
           gapMs: null,
+          bridgePid: event.bridgePid,
         });
       }
       continue;
@@ -367,10 +389,18 @@ function buildTimeline(events: AcpEvent[]): TimelineItem[] {
       durationMs: null,
       gapMs: null,
       imageCount: countAcpImagesFromRaw(event.raw),
+      bridgePid: event.bridgePid,
     });
   }
 
   return enrichTimeline(timeline);
+}
+
+function aggregateSpawnStatus(spawns: ConversationSummary[]): ConversationStatus {
+  if (spawns.some((s) => s.status === "live")) return "live";
+  if (spawns.some((s) => s.status === "error")) return "error";
+  if (spawns.some((s) => s.status === "stale")) return "stale";
+  return "ended";
 }
 
 export function summarizeConversations(events: AcpEvent[]): ConversationSummary[] {
@@ -387,5 +417,57 @@ export function conversationDetail(events: AcpEvent[], bridgePid: number): Conve
   return {
     ...summarizeGroup(bridgePid, grouped),
     timeline: buildTimeline(grouped),
+  };
+}
+
+/** Concatenate per-spawn timelines in `startedAt` order. Do not globally re-sort. */
+export function sessionDetailFromSpawns(
+  sessionId: string,
+  spawns: ConversationSummary[],
+  eventsFor: (pid: number) => AcpEvent[],
+): SessionDetail | null {
+  const matching = spawns.filter((s) => s.acpSessionId === sessionId);
+  if (matching.length === 0) return null;
+  const ordered = [...matching].sort((a, b) =>
+    a.startedAt < b.startedAt ? -1 : a.startedAt > b.startedAt ? 1 : 0,
+  );
+  const concatenated: AcpEvent[] = [];
+  for (const spawn of ordered) {
+    concatenated.push(...hydrateAndSort(eventsFor(spawn.bridgePid)));
+  }
+  const representative = pickRepresentative(ordered);
+  const live = ordered.filter((s) => s.status === "live");
+  const liveBridgePid = live.length > 0 ? pickRepresentative(live).bridgePid : null;
+  const startedAt = ordered.reduce((min, s) => (s.startedAt < min ? s.startedAt : min), ordered[0]!.startedAt);
+  const lastActivityAt = ordered.reduce(
+    (max, s) => (s.lastActivityAt > max ? s.lastActivityAt : max),
+    ordered[0]!.lastActivityAt,
+  );
+  const allEnded = ordered.every((s) => s.endedAt != null);
+  const endedAt = allEnded
+    ? ordered.reduce((max, s) => ((s.endedAt ?? "") > max ? (s.endedAt ?? "") : max), ordered[0]!.endedAt ?? "")
+    : null;
+
+  return {
+    kind: "session",
+    acpSessionId: sessionId,
+    spawns: ordered,
+    representativeBridgePid: representative.bridgePid,
+    liveBridgePid,
+    bridgePid: representative.bridgePid,
+    backendPid: representative.backendPid,
+    route: representative.route,
+    cwd: representative.cwd,
+    mcpXcodeSessionId: representative.mcpXcodeSessionId,
+    startedAt,
+    endedAt,
+    lastActivityAt,
+    status: aggregateSpawnStatus(ordered),
+    durationMs: Math.max(0, Date.parse(lastActivityAt) - Date.parse(startedAt)) || 0,
+    promptCount: ordered.reduce((n, s) => n + s.promptCount, 0),
+    toolCallCount: ordered.reduce((n, s) => n + s.toolCallCount, 0),
+    eventCount: ordered.reduce((n, s) => n + s.eventCount, 0),
+    model: representative.model,
+    timeline: buildTimeline(concatenated),
   };
 }
