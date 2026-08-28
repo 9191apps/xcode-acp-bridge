@@ -34,8 +34,8 @@ function testConfig(): AcpBridgeConfig {
   };
 }
 
-function acpApp(store: AcpEventStore, hub?: EventHub) {
-  return createAcpDashboardApp(store, hub ?? new EventHub(), { config: testConfig() });
+function acpApp(store: AcpEventStore, hub?: EventHub, extra?: Omit<Parameters<typeof createAcpDashboardApp>[2], "config">) {
+  return createAcpDashboardApp(store, hub ?? new EventHub(), { config: testConfig(), ...extra });
 }
 
 function acpAppWithOpenTerminal(
@@ -677,6 +677,62 @@ describe("acp dashboard api", () => {
       method: "POST",
     });
     expect(res.status).toBe(404);
+  });
+
+  test("POST /api/acp-conversations/:pid/disconnect SIGTERMs a live acp-bridge", async () => {
+    const store = new AcpEventStore(eventsPath);
+    await store.append(
+      ev({
+        id: "p",
+        kind: "process_start",
+        bridgePid: 4242,
+        route: "opencode",
+        raw: JSON.stringify({ route: "opencode" }),
+      }),
+    );
+    const signaled: number[] = [];
+    const app = acpApp(store, undefined, {
+      disconnectBridge: (pid) => {
+        signaled.push(pid);
+        return { ok: true, bridgePid: pid };
+      },
+    });
+    const res = await app.request("http://127.0.0.1/api/acp-conversations/4242/disconnect", {
+      method: "POST",
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, bridgePid: 4242 });
+    expect(signaled).toEqual([4242]);
+  });
+
+  test("POST disconnect 404s when conversation is missing", async () => {
+    const store = new AcpEventStore(eventsPath);
+    const app = acpApp(store);
+    const res = await app.request("http://127.0.0.1/api/acp-conversations/999/disconnect", {
+      method: "POST",
+    });
+    expect(res.status).toBe(404);
+  });
+
+  test("POST disconnect 409s when the helper refuses", async () => {
+    const store = new AcpEventStore(eventsPath);
+    await store.append(
+      ev({
+        id: "p",
+        kind: "process_start",
+        bridgePid: 42,
+        route: "opencode",
+        raw: JSON.stringify({ route: "opencode" }),
+      }),
+    );
+    const app = acpApp(store, undefined, {
+      disconnectBridge: () => ({ ok: false, status: 409, error: "not live" }),
+    });
+    const res = await app.request("http://127.0.0.1/api/acp-conversations/42/disconnect", {
+      method: "POST",
+    });
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("not live");
   });
 
   test("PUT /api/acp-conversations/:pid/model 400s on bad body", async () => {

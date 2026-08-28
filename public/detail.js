@@ -26,6 +26,8 @@ let acpDetailDragging = false;
 function renderAcpPlaceholder() {
   const delBtn = $("btn-delete-conversation");
   if (delBtn) delBtn.hidden = true;
+  const discBtn = $("btn-disconnect-conversation");
+  if (discBtn) discBtn.hidden = true;
   detailEl.innerHTML = `
     <div class="empty-state">
       <div class="empty-glyph" aria-hidden="true">⌁</div>
@@ -38,6 +40,8 @@ function renderAcpPlaceholder() {
 function renderAcpNotFound() {
   const delBtn = $("btn-delete-conversation");
   if (delBtn) delBtn.hidden = true;
+  const discBtn = $("btn-disconnect-conversation");
+  if (discBtn) discBtn.hidden = true;
   detailEl.innerHTML = `
     <div class="empty-state">
       <div class="empty-glyph" aria-hidden="true">✕</div>
@@ -548,6 +552,12 @@ function renderAcpDetail() {
     delBtn.hidden = false;
     delBtn.disabled = false;
   }
+  const discBtn = $("btn-disconnect-conversation");
+  if (discBtn) {
+    const livePids = disconnectPids(d);
+    discBtn.hidden = livePids.length === 0;
+    discBtn.disabled = false;
+  }
   if (detailStatusEl) {
     const kind = d.status === "live" ? "live" : d.status === "error" ? "error" : "ok";
     detailStatusEl.className = `pill pill-${kind}`;
@@ -750,6 +760,14 @@ async function selectAcpTimelineItem(item) {
 
 function conversationWritePid(d) {
   return d?.liveBridgePid ?? d?.representativeBridgePid ?? d?.bridgePid ?? acpSelectedPid;
+}
+
+function disconnectPids(d) {
+  if (d?.kind === "session" && Array.isArray(d.spawns)) {
+    return d.spawns.filter((s) => s.status === "live").map((s) => s.bridgePid);
+  }
+  if (d?.status === "live" && typeof d.bridgePid === "number") return [d.bridgePid];
+  return [];
 }
 
 async function modelsForRoute(route, { refresh = false } = {}) {
@@ -971,12 +989,52 @@ acpEs.addEventListener("acp", async () => {
 
 /* ---- init ---------------------------------------------------- */
 
+async function disconnectOpenConversation() {
+  const pids = disconnectPids(acpDetail);
+  if (pids.length === 0) return;
+  const extra = pids.length > 1 ? `\n\nThis will disconnect ${pids.length} live spawns.` : "";
+  if (
+    !confirm(
+      "Disconnect this ACP session from Xcode?" +
+        extra +
+        "\n\nThe current turn stops. Xcode will need to start a new conversation to talk to the agent again.",
+    )
+  ) {
+    return;
+  }
+  const discBtn = $("btn-disconnect-conversation");
+  if (discBtn) discBtn.disabled = true;
+  try {
+    for (const pid of pids) {
+      const res = await fetch(`/api/acp-conversations/${pid}/disconnect`, { method: "POST" });
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const body = await res.json();
+          if (body && typeof body.error === "string") msg = body.error;
+        } catch {
+          // keep HTTP status
+        }
+        alert(`Disconnect failed: ${msg}`);
+        if (discBtn) discBtn.disabled = false;
+        return;
+      }
+    }
+    refreshAcpDetail();
+  } catch (err) {
+    alert(`Disconnect failed: ${err instanceof Error ? err.message : String(err)}`);
+    if (discBtn) discBtn.disabled = false;
+  }
+}
+
 function init() {
   const params = new URLSearchParams(location.search);
   const sessionId = params.get("session");
   const pid = Number(params.get("pid"));
   const delBtn = $("btn-delete-conversation");
   if (delBtn) delBtn.addEventListener("click", () => void deleteOpenConversation());
+  const discBtn = $("btn-disconnect-conversation");
+  if (discBtn) discBtn.addEventListener("click", () => void disconnectOpenConversation());
 
   if (sessionId) {
     acpSelectedSessionId = sessionId;

@@ -74,6 +74,12 @@ struct ConversationResumeResponse: Decodable, Equatable {
     let sessionId: String
 }
 
+/// `POST /api/acp-conversations/:bridgePid/disconnect` success response shape.
+struct ConversationDisconnectResponse: Decodable, Equatable {
+    let ok: Bool
+    let bridgePid: Int
+}
+
 enum ApiClientError: Error, Equatable {
     case invalidResponse
     case http(Int)
@@ -154,6 +160,13 @@ struct ApiClient {
     /// Resumes a past conversation in Terminal via the server's resume helper.
     func resumeConversation(bridgePid: Int) async throws -> ConversationResumeResponse {
         var request = URLRequest(url: baseURL.appendingPathComponent("api/acp-conversations/\(bridgePid)/resume"))
+        request.httpMethod = "POST"
+        return try await send(request)
+    }
+
+    /// SIGTERMs a live `acp-bridge` so Xcode drops the ACP stdio session.
+    func disconnectConversation(bridgePid: Int) async throws -> ConversationDisconnectResponse {
+        var request = URLRequest(url: baseURL.appendingPathComponent("api/acp-conversations/\(bridgePid)/disconnect"))
         request.httpMethod = "POST"
         return try await send(request)
     }

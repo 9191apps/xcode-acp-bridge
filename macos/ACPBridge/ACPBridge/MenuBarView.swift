@@ -171,6 +171,10 @@ struct MenuBarView: View {
             Task { try? await sessionsMenu.resume(session) }
         }
         .disabled(!session.canResume || rowBusy)
+        Button("Disconnect from Xcode") {
+            Task { try? await sessionsMenu.disconnect(session) }
+        }
+        .disabled(!session.canDisconnect || rowBusy)
         Button("Open in Observatory") {
             navigator.navigate(to: sessionsMenu.observatoryURL(for: session, baseURL: ApiClient.defaultBaseURL))
             activateObservatoryWindow()

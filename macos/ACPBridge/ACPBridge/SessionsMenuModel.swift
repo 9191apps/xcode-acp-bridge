@@ -21,6 +21,10 @@ struct SessionSummary: Decodable, Identifiable, Equatable {
     /// (`if (!detail.acpSessionId) return c.json({ error: "no session id" }, 409)`).
     var canResume: Bool { acpSessionId != nil }
 
+    /// Disconnect only applies to a live Xcode stdio spawn — we SIGTERM
+    /// that `acp-bridge` so Xcode drops the ACP session.
+    var canDisconnect: Bool { status == "live" }
+
     /// Set-model only 409s when there's *neither* a session id to persist
     /// against *nor* a live process to inject into — a live process with no
     /// session id yet still succeeds via the in-process model command.
@@ -129,9 +133,10 @@ struct SessionSummary: Decodable, Identifiable, Equatable {
 
 /// View-model backing the MenuBarExtra "Recent sessions" submenu (M3). Reads
 /// `GET /api/acp-conversation-sessions` and offers per-row Set model /
-/// Resume / Open in Observatory — mirroring the server's own 409 rules (via
-/// `SessionSummary.canSetModel`/`canResume`) so the menu disables actions
-/// that would fail rather than surfacing an error after the fact.
+/// Resume / Disconnect / Open in Observatory — mirroring the server's own
+/// 409 rules (via `SessionSummary.canSetModel`/`canResume`/`canDisconnect`)
+/// so the menu disables actions that would fail rather than surfacing an
+/// error after the fact.
 @MainActor
 final class SessionsMenuModel: ObservableObject {
     @Published private(set) var sessions: [SessionSummary] = []
@@ -140,8 +145,8 @@ final class SessionsMenuModel: ObservableObject {
     @Published private(set) var modelOptions: [String: [String]] = [:]
 
     /// Bridge pid of whichever row currently has an in-flight Set model /
-    /// Resume call, so the menu can disable just that row rather than every
-    /// row while a request is outstanding.
+    /// Resume / Disconnect call, so the menu can disable just that row rather
+    /// than every row while a request is outstanding.
     @Published private(set) var pendingBridgePid: Int?
 
     private let apiClient: ApiClient
@@ -209,6 +214,21 @@ final class SessionsMenuModel: ObservableObject {
         do {
             _ = try await apiClient.resumeConversation(bridgePid: session.bridgePid)
             lastError = nil
+        } catch {
+            lastError = error.localizedDescription
+            throw error
+        }
+    }
+
+    /// SIGTERMs `session`'s live `acp-bridge` so Xcode drops the ACP
+    /// stdio connection. Callers should gate this on `session.canDisconnect`.
+    func disconnect(_ session: SessionSummary) async throws {
+        pendingBridgePid = session.bridgePid
+        defer { pendingBridgePid = nil }
+        do {
+            _ = try await apiClient.disconnectConversation(bridgePid: session.bridgePid)
+            lastError = nil
+            await refresh()
         } catch {
             lastError = error.localizedDescription
             throw error

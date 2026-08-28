@@ -52,6 +52,7 @@ final class SessionsMenuModelTests: XCTestCase {
         XCTAssertEqual(session.displayTitle, "cursor — project")
         XCTAssertTrue(session.canResume)
         XCTAssertTrue(session.canSetModel)
+        XCTAssertTrue(session.canDisconnect)
     }
 
     func testDecodingSingletonKindEndedWithNoSessionIdDisablesBothActions() throws {
@@ -73,6 +74,7 @@ final class SessionsMenuModelTests: XCTestCase {
         // Server: no acpSessionId AND not live -> both PUT model and resume 409.
         XCTAssertFalse(session.canResume)
         XCTAssertFalse(session.canSetModel)
+        XCTAssertFalse(session.canDisconnect)
     }
 
     func testDecodingSingletonKindLiveWithNoSessionIdAllowsSetModelButNotResume() throws {
@@ -91,6 +93,7 @@ final class SessionsMenuModelTests: XCTestCase {
         XCTAssertTrue(session.canSetModel)
         // Resume still needs an acpSessionId to hand the resume helper.
         XCTAssertFalse(session.canResume)
+        XCTAssertTrue(session.canDisconnect)
     }
 
     func testDecodingUnknownKindThrows() {
@@ -307,6 +310,45 @@ final class SessionsMenuModelTests: XCTestCase {
             XCTFail("expected error")
         } catch {
             XCTAssertNotNil(model.lastError)
+        }
+    }
+
+    // MARK: - disconnect
+
+    func testDisconnectPostsToDisconnectEndpointThenRefreshes() async throws {
+        let session = try session(bridgePid: 42, acpSessionId: "sess-42", status: "live", route: "cursor")
+        var disconnectCalls = 0
+        let model = makeModel { request in
+            let path = request.url!.path
+            if path.hasSuffix("/disconnect") {
+                disconnectCalls += 1
+                XCTAssertEqual(request.httpMethod, "POST")
+                XCTAssertEqual(path, "/api/acp-conversations/42/disconnect")
+                return Self.jsonResponse(request.url!, #"{"ok":true,"bridgePid":42}"#)
+            }
+            return Self.jsonResponse(request.url!, "[]")
+        }
+
+        try await model.disconnect(session)
+
+        XCTAssertEqual(disconnectCalls, 1)
+        XCTAssertNil(model.lastError)
+        XCTAssertNil(model.pendingBridgePid)
+        XCTAssertEqual(model.sessions, [])
+    }
+
+    func testDisconnectFailurePublishesLastError() async {
+        let session = try! session(bridgePid: 42, acpSessionId: "sess-42", status: "live", route: "cursor")
+        let model = makeModel { request in
+            Self.jsonResponse(request.url!, status: 409, #"{"error":"not live"}"#)
+        }
+
+        do {
+            try await model.disconnect(session)
+            XCTFail("expected error")
+        } catch {
+            XCTAssertNotNil(model.lastError)
+            XCTAssertNil(model.pendingBridgePid)
         }
     }
 

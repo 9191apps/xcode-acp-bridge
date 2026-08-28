@@ -4,6 +4,7 @@ import { stream } from "hono/streaming";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { disconnectAcpBridge, type DisconnectResult } from "../acp/disconnect";
 import { sessionDetailFromSpawns, type ConversationSummary } from "../acp/conversations";
 import { writeModelCommand } from "../acp/commands";
 import { repoRoot } from "../acp/config";
@@ -39,6 +40,8 @@ export type AcpDashboardDeps = {
     resumeArgs?: string[],
     resumeMode?: AcpResumeMode,
   ) => void;
+  /** Injected in tests; production SIGTERMs a verified `acp-bridge` pid. */
+  disconnectBridge?: (pid: number) => DisconnectResult;
 };
 
 function shellQuote(value: string): string {
@@ -510,6 +513,23 @@ export function createAcpDashboardApp(
       return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
     }
     return c.json({ ok: true, sessionId: detail.acpSessionId });
+  });
+
+  app.post("/api/acp-conversations/:bridgePid/disconnect", (c) => {
+    const pid = Number(c.req.param("bridgePid"));
+    if (Number.isNaN(pid)) {
+      return c.json({ error: "not found" }, 404);
+    }
+    const detail = store.detail(pid);
+    if (!detail) {
+      return c.json({ error: "not found" }, 404);
+    }
+    const disconnect = deps.disconnectBridge ?? disconnectAcpBridge;
+    const result = disconnect(pid);
+    if (!result.ok) {
+      return c.json({ error: result.error }, result.status);
+    }
+    return c.json({ ok: true, bridgePid: pid });
   });
 
   const modelsCache = new Map<string, string[]>();
