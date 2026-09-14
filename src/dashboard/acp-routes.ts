@@ -285,8 +285,9 @@ export function createAcpDashboardApp(
 
   store.subscribe((event) => eventHub.publishNamed("acp", event));
 
+  const startedAt = new Date().toISOString();
   app.get("/health", (c) => {
-    return c.json({ ok: true, product: PRODUCT, version: VERSION });
+    return c.json({ ok: true, product: PRODUCT, version: VERSION, startedAt });
   });
 
   // Route/model stay live (a cheap JSON read); only the process-spawning

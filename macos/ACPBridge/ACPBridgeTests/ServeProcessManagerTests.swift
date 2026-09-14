@@ -149,6 +149,60 @@ final class ServeDecisionMakerTests: XCTestCase {
             XCTFail("expected healthCheckFailed, got \(decision)")
         }
     }
+
+    func testReuseWhenProductMatchesAndBundleMtimeIsUnknown() {
+        // Unit tests (and any launch that cannot stat the bundled binary)
+        // must keep adopting a matching leftover — we cannot prove it is stale.
+        let health = Health(ok: true, product: "xcode-acp-bridge", version: "0.1.0")
+        let decision = ServeDecisionMaker.decide(healthResult: .success(health), bundledServeModifiedAt: nil)
+        XCTAssertEqual(decision, .reuse)
+    }
+
+    func testReplaceWhenMatchingHealthHasNoStartedAtAndBundleExists() {
+        // Pre-startedAt sidecars (the Aug 27 leftover) look healthy but do
+        // not serve newer routes such as GET /api/acp-sessions/:id.
+        let health = Health(ok: true, product: "xcode-acp-bridge", version: "0.1.0")
+        let decision = ServeDecisionMaker.decide(
+            healthResult: .success(health),
+            bundledServeModifiedAt: Date()
+        )
+        XCTAssertEqual(decision, .replace)
+    }
+
+    func testReplaceWhenBundledBinaryIsNewerThanServeStartedAt() {
+        let started = Date(timeIntervalSince1970: 1_000_000_000)
+        let health = Health(
+            ok: true,
+            product: "xcode-acp-bridge",
+            version: "0.1.0",
+            startedAt: "2001-09-09T01:46:40.000Z"
+        )
+        let decision = ServeDecisionMaker.decide(
+            healthResult: .success(health),
+            bundledServeModifiedAt: started.addingTimeInterval(3600)
+        )
+        XCTAssertEqual(decision, .replace)
+    }
+
+    func testReuseWhenServeStartedAfterBundledBinary() {
+        let health = Health(
+            ok: true,
+            product: "xcode-acp-bridge",
+            version: "0.1.0",
+            startedAt: "2001-09-09T02:46:40.000Z"
+        )
+        let decision = ServeDecisionMaker.decide(
+            healthResult: .success(health),
+            bundledServeModifiedAt: Date(timeIntervalSince1970: 1_000_000_000)
+        )
+        XCTAssertEqual(decision, .reuse)
+    }
+
+    func testLooksLikeAcpServeRequiresLastPathComponent() {
+        XCTAssertTrue(ServeDecisionMaker.looksLikeAcpServe(executablePath: "/App.app/Contents/MacOS/acp-serve"))
+        XCTAssertFalse(ServeDecisionMaker.looksLikeAcpServe(executablePath: "/App.app/Contents/MacOS/acp-bridge"))
+        XCTAssertFalse(ServeDecisionMaker.looksLikeAcpServe(executablePath: "/usr/bin/curl"))
+    }
 }
 
 /// `start()` is the app delegate's entry point, so its published `state` — not
@@ -172,7 +226,8 @@ final class ServeProcessManagerStateTests: XCTestCase {
                 window: 60,
                 healthyReset: 30,
                 heartbeatInterval: 10_000
-            )
+            ),
+            considerBundledServeAge: false
         )
     }
 

@@ -2,6 +2,15 @@ import { loadAcpBridgeConfig } from "./acp/config";
 import { loadAcpRouteState, resolveRoute } from "./acp/route-state";
 import { resolveBackendSpawnArgs } from "./acp/spawn-args";
 import { runBridge } from "./acp/run-bridge";
+import { MCP_PROXY_ARG, runMcpProxy } from "./acp/mcp-proxy";
+
+// Proxy mode: `acp-bridge mcp-proxy <command> [args...]` pipes stdio to the
+// real MCP server. Xcode's mcpbridge mcpServers entry is rewritten to this so
+// Xcode's permission gate hashes this (re-signed) binary, not the backend's.
+if (process.argv[2] === MCP_PROXY_ARG) {
+  const code = await runMcpProxy(process.argv.slice(3));
+  process.exit(code);
+}
 
 const cfg = loadAcpBridgeConfig();
 const state = loadAcpRouteState(cfg.routeStatePath);

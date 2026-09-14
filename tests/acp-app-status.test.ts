@@ -33,11 +33,18 @@ describe("app status", () => {
     const res = await app().request("http://127.0.0.1/health");
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({
+    const body = (await res.json()) as {
+      ok: boolean;
+      product: string;
+      version: string;
+      startedAt: string;
+    };
+    expect(body).toMatchObject({
       ok: true,
       product: "xcode-acp-bridge",
       version: "0.1.0",
     });
+    expect(Number.isNaN(Date.parse(body.startedAt))).toBe(false);
   });
 
   test("GET /api/app/status returns route, backend, and layout status", async () => {

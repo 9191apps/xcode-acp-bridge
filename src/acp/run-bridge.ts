@@ -7,6 +7,7 @@ import { lookupSessionModel } from "./session-models";
 import { shouldInjectPendingModelOnNew } from "./spawn-args";
 import { handleCursorExtensionLine } from "./cursor-shim";
 import { handleQoderExtensionLine } from "./qoder-shim";
+import { rewriteXcodeMcpServers, xcodeMcpProxyPrefix } from "./mcp-proxy";
 import type { AcpDir, AcpEvent, AcpModelApply } from "./types";
 
 export type RunBridgeOptions = {
@@ -365,8 +366,13 @@ export async function runBridge(opts: RunBridgeOptions): Promise<{ code: number 
     }
   }
 
+  const mcpProxyPrefix = xcodeMcpProxyPrefix();
+
   const c2aSplitter = splitLines(async (line) => {
-    const forwarded = rewriteUnknownSetMode(line, availableModes, defaultMode);
+    const forwarded = rewriteXcodeMcpServers(
+      rewriteUnknownSetMode(line, availableModes, defaultMode),
+      mcpProxyPrefix,
+    );
     const parsed = await logRpc("c2a", forwarded);
     const fromRequest = sessionIdFromRequestRaw(parsed.method, forwarded);
     if (fromRequest) {

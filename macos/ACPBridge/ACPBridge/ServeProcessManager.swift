@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 enum ServeError: Error, Equatable, LocalizedError {
@@ -35,15 +36,22 @@ enum ServeError: Error, Equatable, LocalizedError {
 enum ServeDecision: Equatable {
     case reuse
     case spawn
+    /// Ours is on :8787, but the bundled `acp-serve` is newer (or the leftover
+    /// sidecar is old enough that it doesn't report `startedAt`). Replace it.
+    case replace
     case failure(ServeError)
 }
 
 enum ServeDecisionMaker {
-    static func decide(healthResult: Result<Health, Error>, expectedProduct: String = ProductInfo.identifier) -> ServeDecision {
+    static func decide(
+        healthResult: Result<Health, Error>,
+        bundledServeModifiedAt: Date? = nil,
+        expectedProduct: String = ProductInfo.identifier
+    ) -> ServeDecision {
         switch healthResult {
         case .success(let health):
             if health.product == expectedProduct {
-                return .reuse
+                return decideReuseOrReplace(health: health, bundledServeModifiedAt: bundledServeModifiedAt)
             }
             return .failure(.portOccupiedByOther(health.product))
         case .failure(let error):
@@ -57,6 +65,28 @@ enum ServeDecisionMaker {
             // `portOccupiedByOther`.
             return .failure(.healthCheckFailed(error.localizedDescription))
         }
+    }
+
+    /// True when `path` is the `acp-serve` sidecar, not `acp-bridge` (Xcode stdio).
+    static func looksLikeAcpServe(executablePath: String) -> Bool {
+        URL(fileURLWithPath: executablePath).lastPathComponent == "acp-serve"
+    }
+
+    static func parseHealthStartedAt(_ value: String) -> Date? {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: value) { return date }
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        return plain.date(from: value)
+    }
+
+    private static func decideReuseOrReplace(health: Health, bundledServeModifiedAt: Date?) -> ServeDecision {
+        guard let bundledServeModifiedAt else { return .reuse }
+        guard let startedAt = health.startedAt.flatMap(parseHealthStartedAt) else {
+            return .replace
+        }
+        return bundledServeModifiedAt > startedAt ? .replace : .reuse
     }
 
     /// True when `error` indicates nothing is listening on the port (so we
@@ -138,6 +168,10 @@ final class ServeProcessManager: ObservableObject {
     private let bundle: Bundle
     private let healthTimeout: TimeInterval
     private let restartPolicy: ServeRestartPolicy
+    /// Unit tests run inside the app host, which has a real bundled sidecar.
+    /// They pass `false` so a mocked matching `/health` is reused instead of
+    /// SIGTERM-ing whatever is on :8787.
+    private let considerBundledServeAge: Bool
 
     private var userStopped = false
     private var consecutiveRestarts = 0
@@ -151,13 +185,15 @@ final class ServeProcessManager: ObservableObject {
         fileManager: FileManager = .default,
         bundle: Bundle = .main,
         healthTimeout: TimeInterval = 8,
-        restartPolicy: ServeRestartPolicy = .default
+        restartPolicy: ServeRestartPolicy = .default,
+        considerBundledServeAge: Bool = true
     ) {
         self.apiClient = apiClient
         self.fileManager = fileManager
         self.bundle = bundle
         self.healthTimeout = healthTimeout
         self.restartPolicy = restartPolicy
+        self.considerBundledServeAge = considerBundledServeAge
     }
 
     deinit {
@@ -204,7 +240,9 @@ final class ServeProcessManager: ObservableObject {
     }
 
     /// 1. GET /health. 2. Connection failure → spawn acp-serve. 3. Matching
-    /// product fingerprint → reuse. 4. Otherwise → throw portOccupiedByOther.
+    /// product fingerprint → reuse, unless the bundled binary is newer than
+    /// that leftover (or the leftover predates `startedAt`) → replace.
+    /// 4. Otherwise → throw portOccupiedByOther.
     func ensureRunning() async throws {
         let result: Result<Health, Error>
         do {
@@ -213,12 +251,17 @@ final class ServeProcessManager: ObservableObject {
             result = .failure(error)
         }
 
-        switch ServeDecisionMaker.decide(healthResult: result) {
+        switch ServeDecisionMaker.decide(
+            healthResult: result,
+            bundledServeModifiedAt: bundledServeModifiedAt()
+        ) {
         case .reuse:
             isRunning = true
             return
         case .failure(let error):
             throw error
+        case .replace:
+            terminateReusedAcpServeIfPresent()
         case .spawn:
             break
         }
@@ -246,16 +289,85 @@ final class ServeProcessManager: ObservableObject {
         clearManagedProcess()
     }
 
-    private func spawnServe() throws {
-        guard let executableURL = bundle.executableURL else {
-            throw ServeError.bundledExecutableMissing
+    private func bundledServeURL() -> URL? {
+        guard let executableURL = bundle.executableURL else { return nil }
+        return executableURL.deletingLastPathComponent().appendingPathComponent("acp-serve")
+    }
+
+    private func bundledServeModifiedAt() -> Date? {
+        guard considerBundledServeAge, let url = bundledServeURL() else { return nil }
+        return try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+    }
+
+    /// SIGTERM a leftover `acp-serve` on our port. Never matches `acp-bridge`.
+    private func terminateReusedAcpServeIfPresent() {
+        if let process, process.isRunning {
+            process.terminationHandler = nil
+            process.terminate()
+            process.waitUntilExit()
+            clearManagedProcess()
+            return
         }
-        let macOSDir = executableURL.deletingLastPathComponent()
-        let serveURL = macOSDir.appendingPathComponent("acp-serve")
-        guard fileManager.isExecutableFile(atPath: serveURL.path) else {
+        let port = apiClient.baseURL.port ?? 8787
+        guard let pid = listeningPid(on: port) else { return }
+        guard let path = processCommand(pid: pid),
+              ServeDecisionMaker.looksLikeAcpServe(executablePath: path)
+        else { return }
+        kill(pid, SIGTERM)
+        waitUntilProcessExits(pid: pid, timeout: 2)
+    }
+
+    private func listeningPid(on port: Int) -> pid_t? {
+        let output = runCapture(
+            "/usr/sbin/lsof",
+            arguments: ["-nP", "-iTCP:\(port)", "-sTCP:LISTEN", "-t"]
+        )
+        guard let line = output.split(whereSeparator: \.isNewline).first else { return nil }
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let value = Int32(trimmed), value > 0 else { return nil }
+        return pid_t(value)
+    }
+
+    private func processCommand(pid: pid_t) -> String? {
+        let output = runCapture("/bin/ps", arguments: ["-p", String(pid), "-o", "command="])
+        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return trimmed.split(whereSeparator: \.isWhitespace).first.map(String.init)
+    }
+
+    private func waitUntilProcessExits(pid: pid_t, timeout: TimeInterval) {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if kill(pid, 0) != 0 { return }
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        kill(pid, SIGKILL)
+        _ = kill(pid, 0)
+    }
+
+    private func runCapture(_ launchPath: String, arguments: [String]) -> String {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: launchPath)
+        proc.arguments = arguments
+        let pipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError = FileHandle.nullDevice
+        do {
+            try proc.run()
+        } catch {
+            return ""
+        }
+        proc.waitUntilExit()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        return String(data: data, encoding: .utf8) ?? ""
+    }
+
+    private func spawnServe() throws {
+        guard let serveURL = bundledServeURL(), fileManager.isExecutableFile(atPath: serveURL.path) else {
             throw ServeError.bundledExecutableMissing
         }
 
+        let macOSDir = serveURL.deletingLastPathComponent()
         let resourcesURL = bundle.resourceURL ?? macOSDir.deletingLastPathComponent().appendingPathComponent("Resources")
         let home = try ensureApplicationSupportHome()
         let configPath = home.appendingPathComponent("acp-bridge.config.json")

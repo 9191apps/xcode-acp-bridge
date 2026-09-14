@@ -10,6 +10,15 @@ struct Health: Decodable, Equatable {
     let ok: Bool
     let product: String
     let version: String
+    /// ISO-8601 process start time. Absent on sidecars built before this field.
+    let startedAt: String?
+
+    init(ok: Bool, product: String, version: String, startedAt: String? = nil) {
+        self.ok = ok
+        self.product = product
+        self.version = version
+        self.startedAt = startedAt
+    }
 }
 
 /// `GET`/`PUT /api/acp-route` response shape — the *next* conversation's

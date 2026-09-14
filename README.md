@@ -4,6 +4,8 @@ Local ACP observer bridge for Xcode Intelligence. Runs Xcode's ACP Agent traffic
 
 The bridge is **observe-and-forward**: Xcode spawns the bridge as an ACP Agent, the bridge spawns the configured backend, and every message is forwarded both directions while being recorded. The dashboard shows conversations, timelines, tool calls, and raw JSON-RPC payloads live via SSE.
 
+One deliberate exception to pure forwarding: Xcode's `mcpbridge` MCP entry in `session/new`/`session/load`/`session/resume` is rewritten to spawn `acp-bridge mcp-proxy` (a byte-level stdio pipe to the real command). Xcode's MCP permission gate SHA-256-hashes the binary of the process that spawns `mcpbridge`; letting the backend (e.g. a bun-compiled `opencode` with a broken linker ad-hoc signature) do that directly gets **Xcode itself** SIGKILLed with "Code Signature Invalid / Invalid Page". Interposing the re-signed sidecar keeps the hash on a binary that validates (`src/acp/mcp-proxy.ts`).
+
 ## Prerequisites
 
 - [Bun](https://bun.sh) (runtime and package manager)
