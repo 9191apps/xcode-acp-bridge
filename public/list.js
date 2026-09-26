@@ -4,12 +4,14 @@ const acpNextRouteEl = $("acp-next-route");
 const acpNextModelEl = $("acp-next-model");
 const acpModelsRefreshEl = $("acp-models-refresh");
 const acpModelStatusEl = $("acp-model-status");
+const acpYoloToggleEl = $("acp-yolo-toggle");
 const acpEmpty = $("acp-empty");
 const tableWrap = $("acp-table-wrap");
 const listFilterEl = $("list-filter");
 const listCountEl = $("list-count");
 
 let acpSessionGroups = [];
+let acpYoloOn = false;
 let listFilter = "";
 
 const SCROLL_KEY = "obs-list-scroll";
@@ -232,7 +234,16 @@ async function loadAcpRoute() {
     .map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`)
     .join("");
   acpNextRouteEl.value = data.route;
+  renderAcpYoloToggle(data.yolo);
   await loadAcpModels();
+}
+
+/* Permission switch for the selected route (per-route `yolo` in acp-bridge.config.json).
+   Takes effect on the next Xcode spawn; the running conversation keeps its own setting. */
+function renderAcpYoloToggle(yolo) {
+  acpYoloOn = yolo === true;
+  acpYoloToggleEl.setAttribute("aria-pressed", acpYoloOn ? "true" : "false");
+  acpYoloToggleEl.textContent = acpYoloOn ? "Permissions: YOLO" : "Permissions: Ask me";
 }
 
 async function loadAcpConversations() {
@@ -323,6 +334,27 @@ acpNextRouteEl.addEventListener("change", async () => {
     body: JSON.stringify({ route: acpNextRouteEl.value }),
   });
   await loadAcpRoute();
+});
+
+acpYoloToggleEl.addEventListener("click", async () => {
+  acpYoloToggleEl.disabled = true;
+  try {
+    const res = await fetch("/api/acp-permissions", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ route: acpNextRouteEl.value, yolo: !acpYoloOn }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    renderAcpYoloToggle(data.yolo);
+    acpModelStatusEl.textContent = data.yolo
+      ? "permissions: bridge approves tool calls on the next conversation"
+      : "permissions: Xcode asks again on the next conversation";
+  } catch (err) {
+    acpModelStatusEl.textContent = `permissions: ${err instanceof Error ? err.message : String(err)}`;
+  } finally {
+    acpYoloToggleEl.disabled = false;
+  }
 });
 
 acpModelsRefreshEl.addEventListener("click", async () => {

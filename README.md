@@ -140,6 +140,32 @@ Default config ships three routes: `opencode` (default), `cursor` (Cursor CLI `a
 | `modelApply` | `"inject"` (default): `session/set_config_option` after `session/new`. `"spawn-arg"`: append `--model <id>` at spawn (Cursor, Qoder CLI). |
 | `resumeArgs` | Terminal resume argv; `{sessionId}` is substituted. Default `["-s", "{sessionId}"]`. |
 | `resumeMode` | `"args"` (default): run `command` + `resumeArgs`. `"cursor-acp-load"`: run `src/acp/cursor-acp-resume.ts` which does ACP `session/load` (CLI `--resume` only covers non-ACP chats). `"qoder-acp-load"`: run `src/acp/qoder-acp-resume.ts` (`session/load` + `qodercli-login`). |
+| `yolo` | `false` (default): permission requests are relayed to Xcode, which prompts you. `true`: the bridge answers `session/request_permission` itself and the tool call runs with no prompt. See below. |
+
+### YOLO mode (auto-approved tool calls)
+
+`yolo: true` removes Xcode's approval step for a route. On every `session/request_permission` the bridge picks the granting option — `allow_always` when the agent offers it (fewer round trips: the agent stops asking), otherwise `allow_once` — replies to the agent itself, and never forwards the request to Xcode. The prompt never appears.
+
+```json
+{
+  "yolo": false,                       // top-level default for every route
+  "routes": {
+    "opencode": { "command": "…", "args": ["acp"], "yolo": true }   // this route only
+  }
+}
+```
+
+A route-level `yolo` overrides the top-level value, so the config above auto-approves `opencode` only.
+
+**Switching it from the dashboard:** the route bar has a per-route `Permissions: Ask me` / `Permissions: YOLO` toggle next to the route and model pickers. It writes that route's `yolo` in the config file (`PUT /api/acp-permissions`, logged to the PUT audit log), so it has the same **next conversation** semantics as the route/model pickers: the switch affects the next Xcode spawn, while a conversation that is already running keeps the setting it started with (the bridge reads the config once per spawn). It is per route, so you can keep e.g. `opencode` in YOLO and `cursor` prompting. When the value you pick equals the top-level default the route-level key is removed rather than pinned, so switching a route off and back on leaves the file unchanged (the writer still reformats the whole file to 2-space JSON, like `bun run setup --write`). Editing the config by hand works too, but the dashboard shows edits only after it is restarted (the next spawn picks them up immediately).
+
+What it does **not** do, and how it fails safe:
+
+- The bridge only auto-answers requests whose options actually include a grant. Reject-only requests (and requests with no `id`, or options it cannot parse) are forwarded to Xcode exactly as before, so you can still be asked.
+- It does not touch Xcode's own MCP/`mcpbridge` permission gate — that is a separate Xcode mechanism (see `src/acp/mcp-proxy.ts`), and it does not grant filesystem or network access beyond what the agent already has.
+- The request stays in the JSONL and the synthesized reply is logged as a bridge-owned `c2a` line, so the Observatory timeline shows exactly what was approved. The dashboard toggle turns red for a route that is on, and the bridge prints one line to stderr at startup.
+- Xcode's own approval UI is skipped for these requests — that is the point of the switch, so enable it only for routes/agents you trust to run tools unattended.
+- The Terminal resume helpers (`cursor-acp-resume` / `qoder-acp-resume`) have no approval UI at all and always answer `allow-once`; they are unaffected by `yolo`.
 
 **Cursor auth:** run `agent login` (or set `CURSOR_API_KEY`) before using the `cursor` route. `bun run setup` warns if the agent is not authenticated.
 
@@ -169,8 +195,9 @@ bun run acp-bridge
 | `POST /api/acp-events/clear` | Dashboard: clear ACP events |
 | `GET /api/acp-events/export` | Dashboard: export ACP events JSON |
 | `GET /api/acp-events/:id` | Dashboard: one stored event by id |
-| `GET /api/acp-route` | Next-spawn route + model + available names |
+| `GET /api/acp-route` | Next-spawn route + model + available names + `yolo` |
 | `PUT /api/acp-route` | Set next-spawn route + model (`{ route, model? }`, full replacement) |
+| `PUT /api/acp-permissions` | Set one route's permission switch (`{ route?, yolo }`; `route` defaults to the next route). Writes `yolo` into the config file, returns the route response |
 | `GET /api/acp-models?route=<name>` | Model list for a route (`source`: command / observed / none) |
 | `GET /api/acp-conversations` | Conversation summaries |
 | `GET /api/acp-conversation-sessions` | Conversation list grouped by `acpSessionId` (expandable session rows) |

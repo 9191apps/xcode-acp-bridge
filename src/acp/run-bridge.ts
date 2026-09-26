@@ -8,6 +8,7 @@ import { shouldInjectPendingModelOnNew } from "./spawn-args";
 import { handleCursorExtensionLine } from "./cursor-shim";
 import { handleQoderExtensionLine } from "./qoder-shim";
 import { rewriteXcodeMcpServers, xcodeMcpProxyPrefix } from "./mcp-proxy";
+import { autoApprovePermissionLine } from "./permission-mode";
 import type { AcpDir, AcpEvent, AcpModelApply } from "./types";
 
 export type RunBridgeOptions = {
@@ -23,6 +24,11 @@ export type RunBridgeOptions = {
   /** Default inject. spawn-arg skips entry inject after session/new (model already in argv). */
   modelApply?: AcpModelApply;
   commandsDir?: string;
+  /**
+   * YOLO: auto-approve the agent's `session/request_permission` instead of relaying it to Xcode.
+   * Comes from the route's `yolo` config (see acp-bridge.config.json).
+   */
+  yolo?: boolean;
 };
 
 function splitLines(onLine: (line: string) => void | Promise<void>): {
@@ -175,6 +181,7 @@ export async function runBridge(opts: RunBridgeOptions): Promise<{ code: number 
   let finished = false;
   const pendingModel = opts.pendingModel ?? null;
   const injectPendingOnNew = shouldInjectPendingModelOnNew(opts.modelApply);
+  const yolo = opts.yolo === true;
   const sessionNewIds = new Set<string | number>();
   const injectedIds = new Set<string>();
   const injectedSessions = new Set<string>();
@@ -404,6 +411,23 @@ export async function runBridge(opts: RunBridgeOptions): Promise<{ code: number 
     if (parsed.modeCurrent !== null) defaultMode = parsed.modeCurrent;
     if (parsed.rpcId !== null && injectedIds.has(String(parsed.rpcId))) {
       return; // response to a bridge-injected request: logged, never forwarded
+    }
+
+    // YOLO (route/proxy `yolo: true`): answer permission requests here so the tool call runs with no
+    // Xcode approval prompt. The request itself is already in the JSONL above, the synthesized reply
+    // is logged as a bridge-owned c2a line, and anything unexpected (no allow option, no id) falls
+    // through to the normal forward below.
+    if (yolo && parsed.method === "session/request_permission") {
+      const approval = autoApprovePermissionLine(line);
+      if (approval) {
+        await logRpc("c2a", approval.reply);
+        try {
+          proc.stdin.write(`${approval.reply}\n`);
+        } catch {
+          // backend stdin already closed
+        }
+        return;
+      }
     }
 
     // Cursor extension RPCs (create_plan / update_todos / …): Xcode does not

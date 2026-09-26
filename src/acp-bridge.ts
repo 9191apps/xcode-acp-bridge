@@ -28,6 +28,14 @@ process.on("SIGINT", onSignal);
 const pendingModel = resolved.fallbackReason === null ? (state?.model ?? null) : null;
 const backendArgs = resolveBackendSpawnArgs(resolved.backend, pendingModel);
 
+// YOLO is loud on purpose: it removes Xcode's approval step for this spawn.
+const yolo = resolved.backend.yolo === true;
+if (yolo) {
+  console.error(
+    `acp-bridge: YOLO enabled for route ${resolved.name} — session/request_permission is auto-approved by the bridge; Xcode will not prompt`,
+  );
+}
+
 const { code } = await runBridge({
   backendCommand: resolved.backend.command,
   backendArgs,
@@ -38,5 +46,6 @@ const { code } = await runBridge({
   route: resolved.name,
   pendingModel,
   modelApply: resolved.backend.modelApply ?? "inject",
+  yolo,
 });
 process.exit(code);

@@ -3,6 +3,7 @@
     "opencode": {
       "command": "~/.opencode/bin/opencode",
       "args": ["acp"],
+      "yolo": false,
       "modelsCommand": {
         "command": "~/.opencode/bin/opencode",
         "args": ["models"]
@@ -11,6 +12,7 @@
     "cursor": {
       "command": "~/.local/bin/agent",
       "args": ["acp"],
+      "yolo": false,
       "modelApply": "spawn-arg",
       "resumeMode": "cursor-acp-load",
       "resumeArgs": ["--resume", "{sessionId}"],
@@ -22,6 +24,7 @@
     "qodercli": {
       "command": "~/.local/bin/qodercli",
       "args": ["--acp"],
+      "yolo": false,
       "modelApply": "spawn-arg",
       "resumeMode": "qoder-acp-load",
       "modelsCommand": {
@@ -31,6 +34,7 @@
     }
   },
   "defaultRoute": "opencode",
+  "yolo": false,
   "eventsPath": "./data/acp-events.jsonl",
   "routeStatePath": "./data/acp-route.json",
   "maxRawBytes": 2097152

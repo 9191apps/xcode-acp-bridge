@@ -40,22 +40,23 @@ need_compile=0
 if [[ "${ACP_FORCE_COMPILE:-}" == "1" ]]; then
   need_compile=1
 else
-  entries=(
-    "src/acp-bridge.ts:acp-bridge"
-    "src/index.ts:acp-serve"
-    "src/dashboard/acp-routes.ts:acp-serve"
-    "src/acp/event-store.ts:acp-serve"
-    "src/acp/cursor-acp-resume.ts:cursor-acp-resume"
-    "src/acp/qoder-acp-resume.ts:qoder-acp-resume"
-  )
-  for pair in "${entries[@]}"; do
-    src="${REPO_ROOT}/${pair%%:*}"
-    out="${SIDECAR_DIR}/${pair##*:}"
-    if [[ ! -x "$out" || "$src" -nt "$out" ]]; then
+  # `bun build --compile` inlines the whole import graph, so *any* file under src/ (or the
+  # package metadata) can change a sidecar. Watching only the entry files silently ships stale
+  # binaries when just a dependency changes — e.g. editing src/acp/config.ts alone.
+  for out in acp-bridge acp-serve cursor-acp-resume qoder-acp-resume; do
+    if [[ ! -x "${SIDECAR_DIR}/${out}" ]]; then
       need_compile=1
       break
     fi
   done
+  if [[ "$need_compile" -eq 0 ]]; then
+    newest_sidecar="${SIDECAR_DIR}/acp-serve"
+    if [[ -n "$(find "${REPO_ROOT}/src" -name '*.ts' -newer "$newest_sidecar" -print -quit 2>/dev/null)" ]]; then
+      need_compile=1
+    elif [[ "${REPO_ROOT}/package.json" -nt "$newest_sidecar" || "${REPO_ROOT}/tsconfig.json" -nt "$newest_sidecar" ]]; then
+      need_compile=1
+    fi
+  fi
 fi
 
 if [[ "$need_compile" -eq 1 ]]; then

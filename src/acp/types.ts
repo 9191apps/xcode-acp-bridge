@@ -16,6 +16,13 @@ export type AcpBackend = AcpCommand & {
    * `session/load`s the ACP session (CLI `--resume` only works for non-ACP chats).
    */
   resumeMode?: AcpResumeMode;
+  /**
+   * YOLO: answer the agent's `session/request_permission` in the bridge (allow) instead of relaying
+   * it to Xcode, so tool calls run with no approval prompt. Default: false. A top-level `yolo` sets
+   * the default for every route; a route-level value overrides it. Requests offering no allow option
+   * are still forwarded to Xcode.
+   */
+  yolo?: boolean;
 };
 
 export type AcpEvent = {

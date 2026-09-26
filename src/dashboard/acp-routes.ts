@@ -7,7 +7,7 @@ import path from "node:path";
 import { disconnectAcpBridge, type DisconnectResult } from "../acp/disconnect";
 import { sessionDetailFromSpawns, type ConversationSummary } from "../acp/conversations";
 import { writeModelCommand } from "../acp/commands";
-import { repoRoot } from "../acp/config";
+import { repoRoot, defaultConfigPath, writeRouteYolo } from "../acp/config";
 import { observedModelsFromEvents, runModelsCommand } from "../acp/models";
 import { loadAcpRouteState, resolveRoute, writeAcpRouteState } from "../acp/route-state";
 import { groupConversationsForList } from "../acp/session-list-group";
@@ -42,6 +42,8 @@ export type AcpDashboardDeps = {
   ) => void;
   /** Injected in tests; production SIGTERMs a verified `acp-bridge` pid. */
   disconnectBridge?: (pid: number) => DisconnectResult;
+  /** Config file the permission switch writes; defaults to the resolved layout's config path. */
+  configPath?: string;
 };
 
 function shellQuote(value: string): string {
@@ -220,6 +222,8 @@ function routeResponse(config: AcpBridgeConfig): {
   routes: string[];
   source: "state" | "default";
   model: string | null;
+  /** YOLO for the route the next spawn will use (route-level or top-level `yolo`). */
+  yolo: boolean;
 } {
   const state = loadAcpRouteState(config.routeStatePath);
   const resolved = resolveRoute(config, state);
@@ -230,6 +234,7 @@ function routeResponse(config: AcpBridgeConfig): {
     routes: Object.keys(config.routes),
     source: resolved.fallbackReason === null ? "state" : "default",
     model,
+    yolo: resolved.backend.yolo === true,
   };
 }
 
@@ -280,6 +285,7 @@ export function createAcpDashboardApp(
     throw new Error("createAcpDashboardApp requires deps");
   }
   const { config } = deps;
+  const configPath = deps.configPath ?? defaultConfigPath();
   const eventHub = hub ?? new EventHub();
   const app = new Hono();
 
@@ -395,6 +401,46 @@ export function createAcpDashboardApp(
     writeAcpRouteState(config.routeStatePath, state);
     logModelPut(config, { endpoint: "route-state", route, model: state.model ?? null, outcome: "ok", ...requestMeta(c) });
     return c.json({ ...routeResponse(config), source: "state" as const });
+  });
+
+  // Per-route permission switch (YOLO). Writes `routes[<route>].yolo` in the config file, which the
+  // next Xcode spawn reads — same "next conversation" semantics as the route/model pickers. The
+  // in-memory config is updated in place so the badge and GET reflect it without a restart; a
+  // hand-edited config file still needs one.
+  app.put("/api/acp-permissions", async (c) => {
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "invalid json" }, 400);
+    }
+    const rec = body !== null && typeof body === "object" ? (body as Record<string, unknown>) : {};
+    const state = loadAcpRouteState(config.routeStatePath);
+    const route = typeof rec.route === "string" ? rec.route : (state?.route ?? config.defaultRoute);
+    if (!(route in config.routes)) {
+      logModelPut(config, { endpoint: "permission", route, yolo: null, outcome: "unknown route", ...requestMeta(c) });
+      return c.json({ error: "unknown route" }, 400);
+    }
+    const yolo = rec.yolo;
+    if (typeof yolo !== "boolean") {
+      logModelPut(config, { endpoint: "permission", route, yolo: null, outcome: "invalid yolo", ...requestMeta(c) });
+      return c.json({ error: "invalid yolo" }, 400);
+    }
+    try {
+      writeRouteYolo(configPath, route, yolo);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logModelPut(config, { endpoint: "permission", route, yolo, outcome: `write failed: ${message}`, ...requestMeta(c) });
+      return c.json({ error: message }, 500);
+    }
+    // Mutate in place: `config.defaultBackend` is the same object as its `routes` entry.
+    const backend = config.routes[route]!;
+    if (yolo) backend.yolo = true;
+    else delete backend.yolo;
+    logModelPut(config, { endpoint: "permission", route, yolo, outcome: "ok", ...requestMeta(c) });
+    // `yolo` here is the value just written for the target route (the UI sends the route it shows,
+    // which is the same as the next-spawn route state in every normal flow).
+    return c.json({ ...routeResponse(config), yolo, source: state === null ? ("default" as const) : ("state" as const) });
   });
 
   app.get("/api/acp-sessions/:sessionId", (c) => {

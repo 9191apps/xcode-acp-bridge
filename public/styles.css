@@ -436,6 +436,20 @@ select option {
   min-width: 130px;
 }
 
+/* Per-route permission switch: ON (aria-pressed=true) means the bridge auto-approves
+   session/request_permission for the next conversation — no Xcode approval prompt. */
+.yolo-toggle {
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.yolo-toggle[aria-pressed="true"] {
+  color: var(--red);
+  border-color: rgba(255, 93, 93, 0.45);
+  background: rgba(255, 93, 93, 0.08);
+}
+
 #acp-model-status {
   color: var(--accent);
 }

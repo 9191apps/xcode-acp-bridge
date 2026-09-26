@@ -264,6 +264,129 @@ describe("acp dashboard api", () => {
     expect((await get.json()).route).toBe("other");
   });
 
+  test("GET /api/acp-route reports yolo for the resolved route", async () => {
+    const store = new AcpEventStore(eventsPath);
+    const config = testConfig();
+    config.routes.opencode = { ...config.routes.opencode, yolo: true };
+    config.defaultBackend = config.routes.opencode;
+    const app = acpApp(store, undefined, { config });
+    expect((await (await app.request("http://127.0.0.1/api/acp-route")).json()).yolo).toBe(true);
+
+    const put = await app.request("http://127.0.0.1/api/acp-route", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ route: "other" }),
+    });
+    expect(put.status).toBe(200);
+    expect((await (await app.request("http://127.0.0.1/api/acp-route")).json()).yolo).toBe(false);
+  });
+
+  test("PUT /api/acp-permissions writes the route's yolo and GET reflects it", async () => {
+    const store = new AcpEventStore(eventsPath);
+    await fs.mkdir(dir, { recursive: true });
+    const cfgPath = path.join(dir, "acp-bridge.config.json");
+    await fs.writeFile(
+      cfgPath,
+      `${JSON.stringify(
+        {
+          routes: {
+            opencode: { command: "/bin/echo", args: ["acp"] },
+            other: { command: "/bin/true", args: [] },
+            cursor: { command: "/bin/echo", args: ["acp"] },
+          },
+          defaultRoute: "opencode",
+          eventsPath: "./data/acp-events.jsonl",
+          routeStatePath: path.join(dir, "acp-route.json"),
+          maxRawBytes: 99,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    // Route state lives outside the app factory here, so drive it through the route endpoint.
+    const app = acpApp(store, undefined, { configPath: cfgPath });
+    const on = await app.request("http://127.0.0.1/api/acp-permissions", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ route: "opencode", yolo: true }),
+    });
+    expect(on.status).toBe(200);
+    expect((await on.json()).yolo).toBe(true);
+    expect(JSON.parse(await fs.readFile(cfgPath, "utf8")).routes.opencode.yolo).toBe(true);
+    expect(JSON.parse(await fs.readFile(cfgPath, "utf8")).routes.other.yolo).toBeUndefined();
+    // The in-memory config is updated too, so the badge/GET do not need a restart.
+    expect((await (await app.request("http://127.0.0.1/api/acp-route")).json()).yolo).toBe(true);
+
+    const off = await app.request("http://127.0.0.1/api/acp-permissions", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ route: "opencode", yolo: false }),
+    });
+    expect(off.status).toBe(200);
+    expect((await off.json()).yolo).toBe(false);
+    // No top-level `yolo`, so "off" is the default value: the override key is dropped, not pinned.
+    expect(JSON.parse(await fs.readFile(cfgPath, "utf8")).routes.opencode.yolo).toBeUndefined();
+    expect((await (await app.request("http://127.0.0.1/api/acp-route")).json()).yolo).toBe(false);
+  });
+
+  test("PUT /api/acp-permissions defaults to the next route when route is omitted", async () => {
+    const store = new AcpEventStore(eventsPath);
+    await fs.mkdir(dir, { recursive: true });
+    const cfgPath = path.join(dir, "acp-bridge.config.json");
+    await fs.writeFile(
+      cfgPath,
+      `${JSON.stringify(
+        {
+          routes: { opencode: { command: "/bin/echo", args: ["acp"] } },
+          defaultRoute: "opencode",
+          eventsPath: "./data/acp-events.jsonl",
+          routeStatePath: path.join(dir, "acp-route.json"),
+          maxRawBytes: 99,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    const app = acpApp(store, undefined, { configPath: cfgPath });
+    const res = await app.request("http://127.0.0.1/api/acp-permissions", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ yolo: true }),
+    });
+    expect(res.status).toBe(200);
+    expect(JSON.parse(await fs.readFile(cfgPath, "utf8")).routes.opencode.yolo).toBe(true);
+  });
+
+  test("PUT /api/acp-permissions rejects bad input without writing", async () => {
+    const store = new AcpEventStore(eventsPath);
+    await fs.mkdir(dir, { recursive: true });
+    const cfgPath = path.join(dir, "acp-bridge.config.json");
+    const original = `${JSON.stringify(
+      {
+        routes: { opencode: { command: "/bin/echo", args: ["acp"] } },
+        defaultRoute: "opencode",
+        eventsPath: "./data/acp-events.jsonl",
+        routeStatePath: path.join(dir, "acp-route.json"),
+        maxRawBytes: 99,
+      },
+      null,
+      2,
+    )}\n`;
+    await fs.writeFile(cfgPath, original);
+    const app = acpApp(store, undefined, { configPath: cfgPath });
+    const put = (body: string) =>
+      app.request("http://127.0.0.1/api/acp-permissions", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+
+    expect((await put(JSON.stringify({ route: "nope", yolo: true }))).status).toBe(400);
+    expect((await put(JSON.stringify({ route: "opencode", yolo: "yes" }))).status).toBe(400);
+    expect((await put("not json")).status).toBe(400);
+    expect(await fs.readFile(cfgPath, "utf8")).toBe(original);
+  });
+
   test("PUT unknown route returns 400 and does not write", async () => {
     const store = new AcpEventStore(eventsPath);
     const app = acpApp(store);

@@ -139,6 +139,39 @@ describe("runMcpProxy (e2e via acp-bridge.ts mcp-proxy cat)", () => {
     const code = await proc.exited;
     expect(code).toBe(2);
   });
+
+  test("forwards a full MCP session (initialize, tools/list, tools/call)", async () => {
+    const entry = path.join(import.meta.dir, "../src/acp-bridge.ts");
+    const fixture = path.join(import.meta.dir, "fixtures/mcp-echo-server.ts");
+    const proc = Bun.spawn([process.execPath, entry, MCP_PROXY_ARG, process.execPath, fixture], {
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const requests = [
+      {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "t", version: "0" } },
+      },
+      { jsonrpc: "2.0", method: "notifications/initialized" },
+      { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} },
+      { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "echo", arguments: { text: "pong" } } },
+    ];
+    proc.stdin.write(`${requests.map((r) => JSON.stringify(r)).join("\n")}\n`);
+    proc.stdin.end();
+
+    const responses = (await new Response(proc.stdout).text())
+      .split("\n")
+      .filter((line) => line.trim())
+      .map((line) => JSON.parse(line));
+    expect(await proc.exited).toBe(0);
+    expect(responses.map((r) => r.id)).toEqual([1, 2, 3]);
+    expect(responses[0].result.serverInfo.name).toBe("fixture-mcp");
+    expect(responses[1].result.tools.map((t: { name: string }) => t.name)).toEqual(["echo"]);
+    expect(responses[2].result.content[0].text).toBe("pong");
+  });
 });
 
 describe("runBridge wiring", () => {

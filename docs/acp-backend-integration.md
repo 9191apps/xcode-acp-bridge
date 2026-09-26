@@ -35,6 +35,7 @@
 - [ ] `session/prompt` 后有 `agent_message_chunk`（或等价可见回复）
 - [ ] prompt **result** 带回 `stopReason`（如 `end_turn`），Xcode **不一直转圈**
 - [ ] 工具调用：`tool_call` / `tool_call_update` 与权限 `session/request_permission` 行为可接受
+- [ ] （可选）该 route 配 `yolo: true`（配置或仪表盘 Permissions 开关）后：Xcode 侧**看不到** `session/request_permission`（不弹审批），JSONL 里仍有 a2c 请求 + 桥合成的 c2a allow 回复；只有 reject 选项的请求仍透传给 Xcode；开关对该 route 变红
 - [ ] 观察台：该 spawn 的 `route`、cwd、**ACP `sessionId`**（不是 MCP UUID）显示正确
 
 **会话 ID 陷阱：** Xcode MCP 的 `MCP_XCODE_SESSION_ID` 也会进 `sessionHints`。列表/账本必须优先真实 ACP id；MCP uuid 不能污染 `acpSessionId`。

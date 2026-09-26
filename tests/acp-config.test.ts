@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { loadAcpBridgeConfig, repoRoot } from "../src/acp/config";
+import { loadAcpBridgeConfig, repoRoot, writeRouteYolo } from "../src/acp/config";
 
 function writeCfg(body: unknown): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "acp-cfg-"));
@@ -262,5 +262,147 @@ describe("loadAcpBridgeConfig", () => {
         }),
       ),
     ).toThrow(/routes\.qodercli/);
+  });
+
+  test("route-level yolo is kept and defaults to off", () => {
+    const cfg = loadAcpBridgeConfig(
+      writeCfg({
+        routes: {
+          opencode: { command: "/bin/echo", args: ["acp"] },
+          cursor: { command: "/bin/echo", args: ["acp"], yolo: true },
+        },
+        defaultRoute: "opencode",
+        eventsPath: "./data/acp-events.jsonl",
+        maxRawBytes: 99,
+      }),
+    );
+    expect(cfg.routes.cursor.yolo).toBe(true);
+    // Off means the field is absent, so every existing consumer sees the old shape.
+    expect("yolo" in cfg.routes.opencode).toBe(false);
+    expect("yolo" in cfg.defaultBackend).toBe(false);
+  });
+
+  test("top-level yolo enables every route and a route can opt out", () => {
+    const cfg = loadAcpBridgeConfig(
+      writeCfg({
+        yolo: true,
+        routes: {
+          opencode: { command: "/bin/echo", args: ["acp"] },
+          cursor: { command: "/bin/echo", args: ["acp"], yolo: false },
+          qodercli: { command: "/bin/echo", args: ["--acp"] },
+        },
+        defaultRoute: "opencode",
+        eventsPath: "./data/acp-events.jsonl",
+        maxRawBytes: 99,
+      }),
+    );
+    expect(cfg.routes.opencode.yolo).toBe(true);
+    expect(cfg.defaultBackend.yolo).toBe(true);
+    expect(cfg.routes.qodercli.yolo).toBe(true);
+    expect("yolo" in cfg.routes.cursor).toBe(false);
+  });
+
+  test("throws when yolo is not a boolean", () => {
+    const base = {
+      routes: { opencode: { command: "/bin/echo", args: ["acp"] } },
+      defaultRoute: "opencode",
+      eventsPath: "./data/acp-events.jsonl",
+      maxRawBytes: 99,
+    };
+    expect(() =>
+      loadAcpBridgeConfig(writeCfg({ ...base, yolo: "yes" })),
+    ).toThrow(/yolo must be a boolean/);
+    expect(() =>
+      loadAcpBridgeConfig(
+        writeCfg({
+          ...base,
+          routes: { opencode: { command: "/bin/echo", args: ["acp"], yolo: "on" } },
+        }),
+      ),
+    ).toThrow(/routes\.opencode/);
+  });
+});
+
+describe("writeRouteYolo", () => {
+  function writeCfgFile(body: unknown): string {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "acp-yolo-"));
+    const cfgPath = path.join(dir, "acp-bridge.config.json");
+    fs.writeFileSync(cfgPath, `${JSON.stringify(body, null, 2)}\n`);
+    return cfgPath;
+  }
+
+  const base = {
+    routes: {
+      opencode: { command: "/bin/echo", args: ["acp"] },
+      cursor: { command: "/bin/echo", args: ["acp"], modelApply: "spawn-arg" },
+    },
+    defaultRoute: "opencode",
+    eventsPath: "./data/acp-events.jsonl",
+    maxRawBytes: 99,
+  };
+
+  test("sets one route's yolo and leaves the rest of the file alone", () => {
+    const cfgPath = writeCfgFile(base);
+    writeRouteYolo(cfgPath, "opencode", true);
+
+    const cfg = loadAcpBridgeConfig(cfgPath);
+    expect(cfg.routes.opencode.yolo).toBe(true);
+    expect("yolo" in cfg.routes.cursor).toBe(false);
+    expect(cfg.routes.cursor.modelApply).toBe("spawn-arg");
+    expect(cfg.routes.opencode.command).toBe("/bin/echo");
+    expect(cfg.defaultRoute).toBe("opencode");
+
+    const text = fs.readFileSync(cfgPath, "utf8");
+    expect(text.endsWith("\n")).toBe(true);
+    expect(JSON.parse(text).routes.opencode.yolo).toBe(true);
+  });
+
+  test("writes an explicit route-level false so it overrides a top-level yolo", () => {
+    const cfgPath = writeCfgFile({ ...base, yolo: true });
+    writeRouteYolo(cfgPath, "cursor", false);
+
+    const cfg = loadAcpBridgeConfig(cfgPath);
+    expect("yolo" in cfg.routes.cursor).toBe(false);
+    expect(cfg.routes.opencode.yolo).toBe(true);
+    expect(JSON.parse(fs.readFileSync(cfgPath, "utf8")).routes.cursor.yolo).toBe(false);
+  });
+
+  test("is idempotent and leaves no temp file behind", () => {
+    const cfgPath = writeCfgFile(base);
+    writeRouteYolo(cfgPath, "opencode", true);
+    const first = fs.readFileSync(cfgPath, "utf8");
+    writeRouteYolo(cfgPath, "opencode", true);
+    expect(fs.readFileSync(cfgPath, "utf8")).toBe(first);
+    expect(fs.readdirSync(path.dirname(cfgPath))).toEqual(["acp-bridge.config.json"]);
+  });
+
+  test("drops the route key when the value matches the top-level default", () => {
+    const cfgPath = writeCfgFile({ ...base, yolo: true });
+    const before = fs.readFileSync(cfgPath, "utf8");
+    // routes.opencode is already on via the top-level default, so the switch round-trips to nothing.
+    writeRouteYolo(cfgPath, "opencode", true);
+    expect(fs.readFileSync(cfgPath, "utf8")).toBe(before);
+    writeRouteYolo(cfgPath, "opencode", false);
+    expect(JSON.parse(fs.readFileSync(cfgPath, "utf8")).routes.opencode.yolo).toBe(false);
+    writeRouteYolo(cfgPath, "opencode", true);
+    expect(fs.readFileSync(cfgPath, "utf8")).toBe(before);
+    expect(loadAcpBridgeConfig(cfgPath).routes.opencode.yolo).toBe(true);
+  });
+
+  test("throws for an unknown route without touching the file", () => {
+    const cfgPath = writeCfgFile(base);
+    const before = fs.readFileSync(cfgPath, "utf8");
+    expect(() => writeRouteYolo(cfgPath, "nope", true)).toThrow(/unknown route nope/);
+    expect(fs.readFileSync(cfgPath, "utf8")).toBe(before);
+    expect(fs.readdirSync(path.dirname(cfgPath))).toEqual(["acp-bridge.config.json"]);
+  });
+
+  test("throws when the config has no routes to switch", () => {
+    const cfgPath = writeCfgFile({
+      defaultBackend: { command: "/bin/echo", args: ["acp"] },
+      eventsPath: "./data/acp-events.jsonl",
+      maxRawBytes: 99,
+    });
+    expect(() => writeRouteYolo(cfgPath, "opencode", true)).toThrow(/routes is empty/);
   });
 });

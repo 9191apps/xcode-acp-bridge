@@ -117,6 +117,7 @@ src/acp/
   commands.ts              # data/acp-commands/<pid>.json 原子写（live 热切换）
   session-models.ts        # data/acp-session-models.json  sessionId → model（resume）
   run-bridge.ts            # spawn + 双向 tee + 注入 + watch 命令文件 + set_mode 改写
+  permission-mode.ts       # yolo：挑 allow 选项并合成 permission 回复（纯函数）
   parse.ts                 # 单行 JSON-RPC → 结构化字段（含 modelCurrent / modeCurrent）
   event-store.ts           # JSONL append / load / getById / list
   conversations.ts         # summarizeConversations + conversationDetail
@@ -133,6 +134,7 @@ public/{index.html,app.js,styles.css}  # ACP 观察台 UI
     "opencode": {
       "command": "~/.opencode/bin/opencode",
       "args": ["acp"],
+      "yolo": false,
       "modelsCommand": {
         "command": "~/.opencode/bin/opencode",
         "args": ["models"]
@@ -160,6 +162,7 @@ public/{index.html,app.js,styles.css}  # ACP 观察台 UI
     }
   },
   "defaultRoute": "opencode",
+  "yolo": false,
   "eventsPath": "./data/acp-events.jsonl",
   "routeStatePath": "./data/acp-route.json",
   "maxRawBytes": 2097152
@@ -175,6 +178,7 @@ public/{index.html,app.js,styles.css}  # ACP 观察台 UI
 | `modelApply` | `"inject"`（默认）：`session/new` 后注入 `session/set_config_option`。`"spawn-arg"`：spawn 时追加 `--model <id>`（Cursor、Qoder CLI） |
 | `resumeArgs` | Terminal resume 参数模板，`{sessionId}` 占位；默认 `["-s", "{sessionId}"]` |
 | `resumeMode` | `"args"`（默认）：`command` + `resumeArgs`。`"cursor-acp-load"`：走 `cursor-acp-resume.ts` 的 ACP `session/load`（CLI `--resume` 只能续非 ACP 的 chat）。`"qoder-acp-load"`：走 `qoder-acp-resume.ts`（ACP `session/load` + `qodercli-login`） |
+| `yolo` | `false`（默认）：`session/request_permission` 透传给 Xcode 审批。`true`：桥自己回 allow，不弹审批（见 §7.2）。顶层也可写 `yolo` 作为所有 route 的默认值，route 级覆盖它 |
 
 Cursor 需预先 `agent login`（或 `CURSOR_API_KEY`）；桥不注入 `authenticate` / `cursor_login`。
 
@@ -202,7 +206,7 @@ Qoder CLI 需预先 `qodercli login`（或 `QODER_PERSONAL_ACCESS_TOKEN`）；�
 1. 写 `process_start`（raw 含实际 `route` / `command` / `args`）。
 2. `spawn(command, args)`，把 Xcode stdin → 后端 stdin，后端 stdout → Xcode stdout，两边按行 parse 后 append 事件。
 3. 方向标记：`c2a`（client→agent）/ `a2c`（agent→client）。`process_*` 是 bridge 自己记的，不是 RPC。
-4. **文档化的两处改写**：① 向后端 stdin 注入 `session/set_config_option`（见 §6）；② 兼容改写：Xcode 的 `session/set_mode` 若带后端不认识的 `modeId`（如 `standard`）改写为默认 mode（见 §7.1）。注入请求记入 JSONL；对应 a2c 响应记入 JSONL 后 **丢掉，不写 Xcode stdout**。其它行仍原样转发；parse 失败仍转发原行，并带 `parseError`。
+4. **文档化的三处改写**：① 向后端 stdin 注入 `session/set_config_option`（见 §6）；② 兼容改写：Xcode 的 `session/set_mode` 若带后端不认识的 `modeId`（如 `standard`）改写为默认 mode（见 §7.1）。③ 可选：`yolo` 时自己回答 `session/request_permission`，不写 Xcode stdout（见 §7.2）。注入请求记入 JSONL；对应 a2c 响应记入 JSONL 后 **丢掉，不写 Xcode stdout**。其它行仍原样转发；parse 失败仍转发原行，并带 `parseError`。
 5. stdin 关闭或子进程退出 → `process_end`（或启动失败 → `process_start_error`）；关闭 `fs.watch`，尽力删掉自己的命令文件。
 
 路由解析（`resolveRoute`）：
@@ -314,6 +318,23 @@ Xcode 会发 `session/set_mode { modeId: "standard" | "plan", sessionId }`。`pl
 
 会话摘要 `model` = 事件流 `lastNonNull(modelCurrent)`，再被 `acp-session-models.json` overlay。
 
+### 7.2 YOLO 权限自动批准（`yolo`）
+
+`session/request_permission` 默认是**透传**的：请求原样写 Xcode stdout，由 Xcode 的审批门展示并回答。route（或顶层）配 `"yolo": true` 时，桥自己回答，工具调用不再弹审批。
+
+- 位置：`run-bridge.ts` 的 a2c 分支，紧跟「注入请求响应丢弃」检查之后，早于 cursor/qoder shim。挑选项的纯函数在 `src/acp/permission-mode.ts`。
+- 选择顺序：先按 ACP `kind` 找 `allow_always`，再 `allow_once`（`allow_always` 优先是为了让 agent 之后不再问）；agent 没给 `kind` 时按 `optionId` 猜（`allow-once` / `approve` / …）。
+- 回复形状：`{"jsonrpc":"2.0","id":<原 id>,"result":{"outcome":{"outcome":"selected","optionId":…}}}`，与 cursor/qoder resume helper 的 allow-once 一致。
+- **失败即透传**：非 permission 请求、没有 `id`（通知）、参数不成形、只有 reject 选项 → 返回 null，该行照常转发给 Xcode，人工仍可审批。
+- 可观测性：a2c 请求本来就已经记入 JSONL；桥合成的回复按 `c2a` 记一行（id 用 agent 的原 id，方向是 c2a 所以不会被当成新请求）。仪表盘 `/api/acp-route` 多返回一个 `yolo` 字段，`public/index.html` 的 `#acp-yolo-toggle` 按钮（`Permissions: Ask me` / `Permissions: YOLO`）据此显示并切换；`acp-bridge.ts` 启动时往 stderr 打一行。
+- 不做的事：不动 Xcode 自己的 MCP / `mcpbridge` 权限门（那是另一套机制，见 `mcp-proxy.ts`），也不改变 agent 实际拥有的文件/网络权限。
+
+配置生效范围：route 级 `yolo` 覆盖顶层 `yolo`；两者都缺省 = 关（config 载入时省略该字段，消费方看到的老形状不变）。`acp-bridge.config.json` 里三条 route 都显式写了 `false`，改一条即可只对该 route 放开。
+
+**切换时机（重要）**：`acp-bridge` 启动时读一次 config，所以 `yolo` 是**对话级**的——改完对**下一场** Xcode spawn 生效，正在跑的对话保持它启动时的值（不追溯，也不能请求级切换）。粒度和 route/model 选择完全一致，因为三者都只是「下一场用什么」。
+
+**仪表盘开关**：`PUT /api/acp-permissions` `{ route?, yolo }`（省略 `route` 取 route state 的下一跳）→ `writeRouteYolo()`（`src/acp/config.ts`）把 `routes.<route>.yolo` 写回 config 文件；写入值与顶层 `yolo` 默认值**相同**时改为删除该 route 级键（只写覆盖值），所以 UI 上开→关→开能把文件原样还原。写法与 `scripts/setup.ts --write` 相同（整文件 `JSON.stringify(parsed, null, 2)`，键序保留、数组会展开成多行），并**先写临时文件、`loadAcpBridgeConfig` 校验通过后再 rename**，避免写坏配置让桥起不来。响应体复用 `routeResponse()` 形状（`yolo` 是刚写入的值），同时把内存里的 `config.routes[route]` 就地同步（`defaultBackend` 是同一个对象引用，必须就地改），所以徽标/GET 不用重启；反过来，**手改 config 文件后仪表盘要重启 acp-serve 才会显示**（桥那边立刻生效）。写入记入 PUT 审计日志（`acp-model-puts.jsonl`，`endpoint: "permission"`）。
+
 ---
 
 ## 8. 会话聚合与 Timeline
@@ -371,6 +392,7 @@ lastActivityAt = 最新一条 kind ≠ process_end 的事件
 | PUT | `/api/acp-conversations/:pid/model` | `{ model }`：live 写命令文件（进程在则立即注入）；有 `sessionId` 则写入 resume 账本。409：`conversation not live` / `no session id` |
 | POST | `/api/acp-conversations/:pid/resume` | 有 `acpSessionId` 的会话 → 写 `.command` 并用 Terminal 打开，执行路由 `resumeArgs`（默认 `-s`；cursor 为 `--resume`）。409：`no session id` / `no route for this conversation` |
 | GET | `/api/acp-route` / PUT | 读/写下一跳 **路由 + 模型**（PUT 整表替换） |
+| PUT | `/api/acp-permissions` | `{ route?, yolo }`：写该 route 的 `yolo` 到 config 文件（仪表盘权限开关，下一场 spawn 生效；400 未知 route / 非布尔 yolo，500 写失败） |
 | GET | `/api/acp-models?route=` | 该 route 的模型列表（`source`: command / observed / none） |
 | GET | `/api/acp-events/:id` | 单事件 raw |
 | SSE | `/acp-events` | 列表/详情增量刷新 |
@@ -380,6 +402,7 @@ UI 要点：
 - 列表按 **ACP session** 分组（`GET /api/acp-conversation-sessions`）：同一 `acpSessionId` 的多次 bridge spawn 合并为一行，可展开查看各 spawn；无 session id 的仍单独成行。点父行进代表 spawn（优先 live），点子行进该 `bridgePid`。详情 / model / resume 仍按 `bridgePid`。
 - **Model 列只读**，随 SSE / overlay 更新。
 - **Next conversation** 下拉即时 PUT；只影响下一场 **新** spawn。
+- 路由条上的 **Permissions** 开关（`#acp-yolo-toggle`，§7.2）：按当前选中 route 显示/切换 `yolo`，红色 = 桥自己批准权限请求；同样只影响下一场 spawn。
 - 详情 **model:** 在 `route` 已知且（live **或** 有 `sessionId`）时变成 `<select id="acp-live-model">`。下拉获焦时暂停详情重绘，避免选一半被 SSE 冲掉。重选当前项（focus 时 `selectedIndex = -1`）可对失败注入重试。
 - Timeline 行可点；**Selected event** 粘在底部，pretty-print JSON。
 - Source 标签：`Xcode → Agent` / `Agent → Xcode` / `bridge`。
@@ -426,7 +449,7 @@ Dashboard
 
 接入或升级一个 ACP 后端时，按 **[acp-backend-integration.md](./acp-backend-integration.md)** 做回顾测试（配置、完整回合、模型、resume/同 session 多 spawn、厂商扩展 RPC、观察台）。
 
-- 单测覆盖：config（含 `modelsCommand`）、route-state 的 model、parse `configOptions`（含 model/mode 抽取）、conversations 折叠/时长/model、**session 列表分组**、commands 文件协议、session-models 账本、bridge 注入（new / live / stale ts / retry ts / resume 账本）、**set_mode 未知 modeId 改写（含未学到 modes 时透传）**、cursor extension shim、**qoder extension shim**、dashboard PUT/`resume` 各状态码。
+- 单测覆盖：config（含 `modelsCommand`、`yolo` 的 route 级/顶层/类型校验、**`writeRouteYolo` 的写法/幂等/未知 route/无 tmp 残留**）、route-state 的 model、parse `configOptions`（含 model/mode 抽取）、conversations 折叠/时长/model、**session 列表分组**、commands 文件协议、session-models 账本、bridge 注入（new / live / stale ts / retry ts / resume 账本）、**set_mode 未知 modeId 改写（含未学到 modes 时透传）**、cursor extension shim、**qoder extension shim**、**yolo 权限请求（允许选项挑选、reject-only/无 id/坏 JSON 透传、开启时 Xcode 看不到请求、关闭时转发并转发回 Xcode 的答复）**、dashboard PUT/`resume`/`yolo` 字段/**`/api/acp-permissions`（写文件 + 内存同步 + 400/500）** 各状态码。
 - `data/` 已 gitignore；本地 JSONL / route state / commands / session-models 不入库。
 - 改 API、注入逻辑或 `public/*` 后：重启 dashboard，浏览器硬刷新（否则新接口 404 → 列表空白）。
 - 桥本身无端口；只依赖 config 与可写的 `eventsPath` 目录。
